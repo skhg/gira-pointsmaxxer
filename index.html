@@ -19,7 +19,7 @@
           <p class="eyebrow">Lisbon Gira Route Optimizer</p>
           <h1>Gira Grand Prix</h1>
           <p class="lede">
-            Maximise points over a 2-hour window by chaining Gira rides between
+            Maximise your points by chaining Gira rides between
             high-occupation starts and high-empty finishes.
           </p>
         </div>
@@ -92,9 +92,21 @@
           <div class="controls-grid">
             <label>
               <span>Start station</span>
-              <select id="startInput" disabled>
-                <option value="">Connect your account first</option>
-              </select>
+              <div class="field-inline">
+                <select id="startInput" disabled>
+                  <option value="">Connect your account first</option>
+                </select>
+                <button
+                  type="button"
+                  class="field-inline__button"
+                  id="currentLocationButton"
+                  aria-label="Use current location"
+                  title="Use current location"
+                  disabled
+                >
+                  📍
+                </button>
+              </div>
             </label>
             <label>
               <span>Finish station</span>
@@ -103,8 +115,9 @@
               </select>
             </label>
             <label>
-              <span>Time budget (minutes)</span>
-              <input id="budgetInput" type="number" min="15" max="240" step="5" value="120" />
+              <span>Finish time</span>
+              <input id="finishTimeInput" type="time" step="300" />
+              <small class="field-note" id="finishTimeNote">Choose a finish time for today.</small>
             </label>
             <label>
               <span>Average cycling speed (km/h)</span>
@@ -123,7 +136,7 @@
           <div class="actions-row">
             <button class="primary-button" id="planButton" disabled>Find best strategy</button>
             <p class="tiny-note" id="plannerNote">
-              The optimizer uses the live snapshot, a 30-second time grid, and station-to-station travel estimates.
+              The optimizer uses the live snapshot, a 30-second time grid, and the minutes remaining until your chosen finish time.
             </p>
           </div>
         </section>

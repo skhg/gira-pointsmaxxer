@@ -1,8 +1,6 @@
 import {
   clearSavedCredentials,
-  getRuntimeLabel,
   getSessionSummary,
-  isNativeRuntime,
   loadSavedCredentials,
   loadLiveSnapshot,
   loginWithGira,
@@ -11,6 +9,7 @@ import {
 } from "./gira-client.js";
 
 const RESOLUTION_SECONDS = 30;
+const DEFAULT_CHALLENGE_MINUTES = 120;
 const DEFAULT_OCCUPIED_THRESHOLD = 0.7;
 const DEFAULT_EMPTY_THRESHOLD = 0.7;
 const DEFAULT_WALKING_SPEED_KMH = 4.8;
@@ -18,6 +17,9 @@ const DEFAULT_WALKING_DETOUR_FACTOR = 1.12;
 const CURRENT_LOCATION_VALUE = "__current_location__";
 const CURRENT_LOCATION_ORIGIN_CODE = "__current_location_origin__";
 const CURRENT_LOCATION_CACHE_MS = 1000 * 60 * 2;
+const FINISH_TIME_STEP_MINUTES = 5;
+const FINISH_TIME_REFRESH_MS = 1000 * 30;
+const MINIMUM_REMAINING_MINUTES = 5;
 
 const demoStations = [
   { code: "104", name: "104 - Gare do Oriente", latitude: 38.766716, longitude: -9.097322, bikes: 18, docks: 20, serialNumber: "demo-104", assetStatus: "active" },
@@ -38,6 +40,7 @@ const state = {
   currentLocation: null,
   source: null,
   fetchedAt: null,
+  isResolvingCurrentLocation: false,
   plan: null,
   stationByCode: new Map(),
   stations: [],
@@ -46,12 +49,14 @@ const state = {
 
 const elements = {
   authSummary: document.getElementById("authSummary"),
-  budgetInput: document.getElementById("budgetInput"),
+  currentLocationButton: document.getElementById("currentLocationButton"),
   demoButton: document.getElementById("demoButton"),
   detourInput: document.getElementById("detourInput"),
   distanceValue: document.getElementById("distanceValue"),
   emailInput: document.getElementById("emailInput"),
   endInput: document.getElementById("endInput"),
+  finishTimeInput: document.getElementById("finishTimeInput"),
+  finishTimeNote: document.getElementById("finishTimeNote"),
   loadLiveButton: document.getElementById("loadLiveButton"),
   loginButton: document.getElementById("loginButton"),
   loginForm: document.getElementById("loginForm"),
@@ -83,6 +88,145 @@ function showToast(message, type = "info") {
   showToast.timeoutId = setTimeout(() => {
     elements.toast.hidden = true;
   }, 4000);
+}
+
+function isLocalDevelopmentHost() {
+  return ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname || "");
+}
+
+function padTimeNumber(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatTimeInputValue(date) {
+  return `${padTimeNumber(date.getHours())}:${padTimeNumber(date.getMinutes())}`;
+}
+
+function formatClockTime(date) {
+  return new Intl.DateTimeFormat([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatRemainingTime(minutes) {
+  const totalMinutes = Math.max(0, Math.floor(minutes));
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const remainder = totalMinutes % 60;
+  if (remainder === 0) return `${hours}h`;
+  return `${hours}h ${remainder}m`;
+}
+
+function roundUpToStep(date, stepMinutes) {
+  const rounded = new Date(date);
+  const hadSeconds = rounded.getSeconds() > 0 || rounded.getMilliseconds() > 0;
+  rounded.setSeconds(0, 0);
+
+  const remainder = rounded.getMinutes() % stepMinutes;
+  if (remainder !== 0 || hadSeconds) {
+    const minutesToAdd = remainder === 0 ? stepMinutes : stepMinutes - remainder;
+    rounded.setMinutes(rounded.getMinutes() + minutesToAdd);
+  }
+
+  return rounded;
+}
+
+function getLatestFinishTimeToday(now = new Date()) {
+  const latest = new Date(now);
+  latest.setHours(23, 55, 0, 0);
+  return latest;
+}
+
+function initializeFinishTimeInput() {
+  if (elements.finishTimeInput.value) return;
+
+  const now = new Date();
+  const roundedNow = roundUpToStep(now, FINISH_TIME_STEP_MINUTES);
+  const defaultFinish = new Date(roundedNow);
+  defaultFinish.setMinutes(defaultFinish.getMinutes() + DEFAULT_CHALLENGE_MINUTES);
+
+  const latestFinish = getLatestFinishTimeToday(now);
+  if (defaultFinish > latestFinish) {
+    defaultFinish.setTime(latestFinish.getTime());
+  }
+
+  elements.finishTimeInput.value = formatTimeInputValue(defaultFinish);
+}
+
+function parseFinishTimeValue(value) {
+  const match = /^(\d{2}):(\d{2})$/u.exec(String(value || ""));
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return { hours, minutes };
+}
+
+function getFinishTimeStatus(now = new Date()) {
+  const parsed = parseFinishTimeValue(elements.finishTimeInput.value);
+  if (!parsed) {
+    return {
+      message: "Choose a finish time for today.",
+      state: "warning",
+      valid: false,
+    };
+  }
+
+  const deadline = new Date(now);
+  deadline.setHours(parsed.hours, parsed.minutes, 0, 0);
+
+  const remainingMinutes = (deadline.getTime() - now.getTime()) / 60000;
+
+  if (remainingMinutes <= 0) {
+    return {
+      deadline,
+      message: `${formatClockTime(deadline)} has already passed today. Choose a later finish time.`,
+      remainingMinutes,
+      state: "error",
+      valid: false,
+    };
+  }
+
+  if (remainingMinutes < MINIMUM_REMAINING_MINUTES) {
+    return {
+      deadline,
+      message: `Only ${formatRemainingTime(remainingMinutes)} remain until ${formatClockTime(deadline)}. Choose at least ${MINIMUM_REMAINING_MINUTES} minutes from now.`,
+      remainingMinutes,
+      state: "warning",
+      valid: false,
+    };
+  }
+
+  return {
+    deadline,
+    message: `${formatRemainingTime(remainingMinutes)} remaining until ${formatClockTime(deadline)}.`,
+    remainingMinutes,
+    state: "ok",
+    valid: true,
+  };
+}
+
+function updatePlannerAvailability() {
+  const finishTimeStatus = getFinishTimeStatus();
+  elements.finishTimeNote.textContent = finishTimeStatus.message;
+  elements.finishTimeNote.dataset.state = finishTimeStatus.state;
+  elements.planButton.disabled = state.stations.length === 0 || !finishTimeStatus.valid;
+  elements.currentLocationButton.disabled =
+    state.stations.length === 0 || state.isResolvingCurrentLocation;
+  return finishTimeStatus;
 }
 
 function getStationDisplayCode(station) {
@@ -136,7 +280,7 @@ function renderSnapshotMeta() {
     ? `${state.source === "live" ? "Live Gira" : "Demo"}${state.fetchedAt ? ` · ${new Date(state.fetchedAt).toLocaleTimeString()}` : ""}`
     : "None loaded";
   elements.stationCount.textContent = String(state.stations.length);
-  elements.planButton.disabled = state.stations.length === 0;
+  updatePlannerAvailability();
 }
 
 function renderStationOptions() {
@@ -193,12 +337,8 @@ function setUser(user) {
   elements.loadLiveButton.disabled = !authenticated;
   elements.loginButton.disabled = false;
   elements.authSummary.textContent = authenticated
-    ? isNativeRuntime()
-      ? `Signed in as ${user.name || user.email}. Live snapshots are fetched directly on ${getRuntimeLabel()}, and the saved sign-in stays on this device until you log out.`
-      : `Signed in as ${user.name || user.email}. Live snapshots stay server-side on this local app instance, and the saved sign-in stays on this browser until you log out.`
-    : isNativeRuntime()
-      ? "Live mode signs in directly on this device and can remember your sign-in between refreshes until you log out."
-      : "Live mode uses your own Gira account and can remember your sign-in in this browser between refreshes until you log out.";
+    ? `Signed in as ${user.name || user.email}. Live snapshots stay server-side on this local app instance, and the saved sign-in stays on this browser until you log out.`
+    : "Live mode uses your own Gira account and can remember your sign-in in this browser between refreshes until you log out.";
 }
 
 async function syncSession() {
@@ -357,7 +497,8 @@ function getCurrentLocationErrorMessage(error) {
   return error?.message || "Could not determine the current location.";
 }
 
-async function requestCurrentLocationPosition() {
+async function requestCurrentLocationPosition(options = {}) {
+  const { forceFresh = false } = options;
   const mockLocation = globalThis.__GIRA_GRAND_PRIX_MOCK_LOCATION__;
   if (
     mockLocation &&
@@ -404,7 +545,7 @@ async function requestCurrentLocationPosition() {
       },
       {
         enableHighAccuracy: true,
-        maximumAge: CURRENT_LOCATION_CACHE_MS,
+        maximumAge: forceFresh ? 0 : CURRENT_LOCATION_CACHE_MS,
         timeout: 10000,
       }
     );
@@ -424,18 +565,20 @@ function updateCurrentLocationOptionLabel() {
     : "Current location";
 }
 
-async function resolveCurrentLocationStart() {
+async function resolveCurrentLocationStart(options = {}) {
+  const { forceRefresh = false } = options;
   if (state.stations.length === 0) {
     throw new Error("Load a station snapshot before using Current Location.");
   }
 
   const cachedLocation =
+    !forceRefresh &&
     state.currentLocation &&
     Date.now() - state.currentLocation.capturedAt <= CURRENT_LOCATION_CACHE_MS
       ? state.currentLocation
       : null;
 
-  const position = cachedLocation || (await requestCurrentLocationPosition());
+  const position = cachedLocation || (await requestCurrentLocationPosition({ forceFresh: forceRefresh }));
   const origin = createCurrentLocationOrigin(position);
   const nearestStation = findNearestStation(
     origin,
@@ -460,17 +603,39 @@ async function resolveCurrentLocationStart() {
   };
 }
 
-async function handleStartSelectionChange() {
-  if (elements.startInput.value !== CURRENT_LOCATION_VALUE) return;
+async function activateCurrentLocation(options = {}) {
+  const { forceRefresh = false, preserveSelectionOnFailure = false } = options;
+  const previousStartValue = elements.startInput.value;
+  if (!preserveSelectionOnFailure || forceRefresh) {
+    elements.startInput.value = CURRENT_LOCATION_VALUE;
+  }
 
+  state.isResolvingCurrentLocation = true;
+  elements.currentLocationButton.textContent = "📍…";
+  updatePlannerAvailability();
   showToast("Checking your current location...");
 
   try {
-    const resolved = await resolveCurrentLocationStart();
+    const resolved = await resolveCurrentLocationStart({ forceRefresh });
+    elements.startInput.value = CURRENT_LOCATION_VALUE;
     showToast(`Current location resolved to ${resolved.station.label}.`);
+    return resolved;
   } catch (error) {
+    if (preserveSelectionOnFailure) {
+      elements.startInput.value = previousStartValue;
+    }
     showToast(error.message, "error");
+    throw error;
+  } finally {
+    state.isResolvingCurrentLocation = false;
+    elements.currentLocationButton.textContent = "📍";
+    updatePlannerAvailability();
   }
+}
+
+async function handleStartSelectionChange() {
+  if (elements.startInput.value !== CURRENT_LOCATION_VALUE) return;
+  await activateCurrentLocation({ preserveSelectionOnFailure: true });
 }
 
 function computeOptimalPlan(config) {
@@ -479,9 +644,11 @@ function computeOptimalPlan(config) {
     startCode,
     endCode,
     budgetMinutes,
+    finishDeadline,
     speedKmh,
     detourFactor,
     rideOverheadMinutes,
+    plannedAt,
     startLocationOrigin = null,
   } = config;
 
@@ -493,11 +660,11 @@ function computeOptimalPlan(config) {
   }
 
   if (speedKmh <= 0 || detourFactor < 1 || budgetMinutes <= 0) {
-    throw new Error("The speed, detour factor, and time budget must all be positive.");
+    throw new Error("The speed, detour factor, and remaining time must all be positive.");
   }
 
   const maxSlots = Math.floor((budgetMinutes * 60) / RESOLUTION_SECONDS);
-  if (maxSlots <= 0) throw new Error("The time budget is too small for the current planner resolution.");
+  if (maxSlots <= 0) throw new Error("Not enough time remains for the current planner resolution.");
 
   const chosenStartStation = stations[startIndex];
   let rideStartIndex = startIndex;
@@ -673,11 +840,15 @@ function computeOptimalPlan(config) {
   const totalWalkMinutes = walkingSteps.reduce((sum, step) => sum + step.travelMinutes, 0);
 
   return {
+    challengeFinishTime: finishDeadline,
+    challengeRemainingMinutes: budgetMinutes,
     endIndex,
     endStation: stations[endIndex],
     finishAt: finalExactMinutes,
     bikePickupStation: stations[rideStartIndex],
+    plannedAt,
     points: finalScore,
+    remainingBufferMinutes: Math.max(0, budgetMinutes - (totalRideMinutes + totalWalkMinutes)),
     rides: path.length,
     route: rideSteps,
     startOrigin: startLocationOrigin,
@@ -751,6 +922,18 @@ function renderPlan(plan) {
   elements.summaryDetails.innerHTML = `
     <dl class="summary-breakdown">
       <div>
+        <dt>Planned at</dt>
+        <dd>${formatClockTime(plan.plannedAt)}</dd>
+      </div>
+      <div>
+        <dt>Finish by</dt>
+        <dd>${formatClockTime(plan.challengeFinishTime)}</dd>
+      </div>
+      <div>
+        <dt>Minutes remaining</dt>
+        <dd>${formatMinutes(plan.challengeRemainingMinutes)}</dd>
+      </div>
+      <div>
         <dt>Start</dt>
         <dd>${plan.startOrigin ? "Current location" : plan.startStation.label}</dd>
       </div>
@@ -761,6 +944,10 @@ function renderPlan(plan) {
       ${nearestStationMarkup}
       ${pickupMarkup}
       ${initialWalkingMarkup}
+      <div>
+        <dt>Buffer after route</dt>
+        <dd>${formatMinutes(plan.remainingBufferMinutes)}</dd>
+      </div>
       <div>
         <dt>Start bonus points</dt>
         <dd>${plan.totalStartBonus}</dd>
@@ -1156,6 +1343,12 @@ function drawNetwork() {
 }
 
 async function runPlanner() {
+  const finishTimeStatus = updatePlannerAvailability();
+  if (!finishTimeStatus.valid) {
+    showToast(finishTimeStatus.message, "error");
+    return;
+  }
+
   let startStation = null;
   let startLocationOrigin = null;
 
@@ -1175,20 +1368,23 @@ async function runPlanner() {
   }
 
   try {
+    const plannedAt = new Date();
     const plan = computeOptimalPlan({
       stations: state.stations,
       startCode: startStation.code,
       startLocationOrigin,
       endCode: endStation.code,
-      budgetMinutes: Number(elements.budgetInput.value),
+      budgetMinutes: finishTimeStatus.remainingMinutes,
+      finishDeadline: finishTimeStatus.deadline,
       detourFactor: Number(elements.detourInput.value),
+      plannedAt,
       rideOverheadMinutes: Number(elements.overheadInput.value),
       speedKmh: Number(elements.speedInput.value),
     });
 
     if (!plan) {
       renderPlan(null);
-      showToast("No feasible path was found inside the current time budget.", "error");
+      showToast("No feasible path was found before the chosen finish time.", "error");
       return;
     }
 
@@ -1203,10 +1399,14 @@ elements.loginForm.addEventListener("submit", login);
 elements.logoutButton.addEventListener("click", logout);
 elements.loadLiveButton.addEventListener("click", loadLiveStations);
 elements.demoButton.addEventListener("click", loadDemoStations);
+elements.finishTimeInput.addEventListener("input", () => {
+  updatePlannerAvailability();
+});
+elements.currentLocationButton.addEventListener("click", () => {
+  activateCurrentLocation({ forceRefresh: true, preserveSelectionOnFailure: true }).catch(() => null);
+});
 elements.startInput.addEventListener("change", () => {
-  handleStartSelectionChange().catch(error => {
-    showToast(error.message, "error");
-  });
+  handleStartSelectionChange().catch(() => null);
 });
 elements.planButton.addEventListener("click", () => {
   runPlanner().catch(error => {
@@ -1215,6 +1415,16 @@ elements.planButton.addEventListener("click", () => {
 });
 
 window.addEventListener("resize", drawNetwork);
+
+if (isLocalDevelopmentHost()) {
+  elements.demoButton.hidden = false;
+}
+
+initializeFinishTimeInput();
+updatePlannerAvailability();
+setInterval(() => {
+  updatePlannerAvailability();
+}, FINISH_TIME_REFRESH_MS);
 
 hydrateSavedCredentials()
   .catch(() => null)
