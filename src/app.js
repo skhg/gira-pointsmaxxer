@@ -211,7 +211,6 @@ async function hydrateSavedCredentials() {
   if (!savedCredentials) return;
 
   elements.emailInput.value = savedCredentials.email;
-  elements.passwordInput.value = savedCredentials.password;
 }
 
 async function login(event) {
@@ -224,7 +223,7 @@ async function login(event) {
 
   try {
     const data = await loginWithGira(email, password);
-    await saveCredentials(email, password).catch(() => null);
+    await saveCredentials(email).catch(() => null);
 
     setUser(data.user);
     showToast("Signed in. Loading the latest Gira snapshot...");

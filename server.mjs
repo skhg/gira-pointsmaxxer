@@ -80,6 +80,27 @@ function stripLeadingZeros(value) {
   return stripped || String(value ?? "");
 }
 
+function redactSensitiveText(value, secrets = []) {
+  let text = typeof value === "string" ? value : "";
+  if (!text) return "";
+
+  text = text
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[redacted-email]")
+    .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/giu, "Bearer [redacted-token]")
+    .replace(
+      /\b(access[_-]?token|refresh[_-]?token|password|token)\b\s*[:=]\s*["']?[^"',\s}]+["']?/giu,
+      "$1=[redacted]"
+    );
+
+  for (const secret of secrets) {
+    const normalizedSecret = String(secret || "");
+    if (normalizedSecret.length < 4) continue;
+    text = text.split(normalizedSecret).join("[redacted]");
+  }
+
+  return text;
+}
+
 function writeJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     "Cache-Control": "no-store",
@@ -170,13 +191,26 @@ async function upstreamJson(url, options) {
   };
 }
 
-function sanitizeAuthFailure(status, body) {
-  const message =
-    body?.error?.message ||
-    body?.statusDescription ||
-    "The Gira authentication service rejected the request.";
+function sanitizeAuthFailure(status, context = "login") {
+  const statusCode = status >= 400 ? status : 401;
+  if (context === "refresh") {
+    return {
+      statusCode,
+      message: "Your Gira session expired. Please sign in again.",
+    };
+  }
 
-  return { statusCode: status >= 400 ? status : 401, message };
+  if (statusCode === 429) {
+    return {
+      statusCode,
+      message: "The Gira authentication service is temporarily rate limiting requests.",
+    };
+  }
+
+  return {
+    statusCode,
+    message: "The Gira email or password was not accepted.",
+  };
 }
 
 async function loginToGira(email, password) {
@@ -197,7 +231,7 @@ async function loginToGira(email, password) {
   });
 
   if (!response.ok || !response.body?.data?.accessToken || !response.body?.data?.refreshToken) {
-    throw sanitizeAuthFailure(response.status, response.body);
+    throw sanitizeAuthFailure(response.status, "login");
   }
 
   return response.body.data;
@@ -216,7 +250,7 @@ async function refreshSession(session) {
   });
 
   if (!response.ok || !response.body?.data?.accessToken || !response.body?.data?.refreshToken) {
-    throw sanitizeAuthFailure(response.status, response.body);
+    throw sanitizeAuthFailure(response.status, "refresh");
   }
 
   session.accessToken = response.body.data.accessToken;
@@ -559,7 +593,11 @@ const server = createServer(async (request, response) => {
         : Number.isInteger(error?.code) && error.code >= 400 && error.code <= 599
           ? error.code
           : 500;
-    const message = error?.message || "Unexpected server error.";
+    const message =
+      redactSensitiveText(error?.message, [
+        error?.accessToken,
+        error?.refreshToken,
+      ]) || "Unexpected server error.";
     writeJson(response, statusCode, {
       error: message,
     });

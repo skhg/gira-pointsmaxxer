@@ -9,7 +9,6 @@ const USER_AGENT = "Gira Grand Prix/0.1 (Capacitor)";
 const PUBLIC_STATIONS_TTL_MS = 1000 * 60 * 60 * 12;
 const SESSION_STORAGE_KEY = "gira-grand-prix-session-v1";
 const CREDENTIALS_STORAGE_KEY = "gira-grand-prix-credentials-v1";
-const CREDENTIALS_TTL_SECONDS = 1000 * 60 * 60 * 24 * 30 / 1000;
 const STATIONS_QUERY =
   "query getStations {getStations { code, description, latitude, longitude, name, bikes, docks, serialNumber, assetStatus }}";
 
@@ -25,43 +24,13 @@ function getWebStorage() {
   return typeof localStorage !== "undefined" ? localStorage : null;
 }
 
-function canUseDocumentCookies() {
-  return typeof document !== "undefined" && typeof document.cookie === "string";
-}
-
-function getCookieValue(key) {
-  if (!canUseDocumentCookies()) return null;
-
-  const encodedKey = encodeURIComponent(key);
-  const cookie = document.cookie
-    .split(";")
-    .map(entry => entry.trim())
-    .find(entry => entry.startsWith(`${encodedKey}=`));
-
-  if (!cookie) return null;
-
-  return decodeURIComponent(cookie.slice(encodedKey.length + 1));
-}
-
-function setCookieValue(key, value) {
-  if (!canUseDocumentCookies()) return;
-
-  document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; Max-Age=${CREDENTIALS_TTL_SECONDS}; Path=/; SameSite=Lax`;
-}
-
-function removeCookieValue(key) {
-  if (!canUseDocumentCookies()) return;
-
-  document.cookie = `${encodeURIComponent(key)}=; Max-Age=0; Path=/; SameSite=Lax`;
-}
-
 async function getStoredValue(key) {
   if (IS_NATIVE_APP) {
     const { value } = await Preferences.get({ key });
     return value;
   }
 
-  return getWebStorage()?.getItem(key) ?? getCookieValue(key);
+  return getWebStorage()?.getItem(key) ?? null;
 }
 
 async function setStoredValue(key, value) {
@@ -72,10 +41,7 @@ async function setStoredValue(key, value) {
 
   if (getWebStorage()) {
     getWebStorage().setItem(key, value);
-    return;
   }
-
-  setCookieValue(key, value);
 }
 
 async function removeStoredValue(key) {
@@ -86,10 +52,7 @@ async function removeStoredValue(key) {
 
   if (getWebStorage()) {
     getWebStorage().removeItem(key);
-    return;
   }
-
-  removeCookieValue(key);
 }
 
 function createError(message, status) {
@@ -195,14 +158,23 @@ export async function loadSavedCredentials() {
 
   try {
     const credentials = JSON.parse(value);
-    if (!credentials?.email || !credentials?.password) {
+    const email = String(credentials?.email || "").trim();
+    if (!email) {
       await clearSavedCredentials();
       return null;
     }
 
+    if (credentials?.password) {
+      await setStoredValue(
+        CREDENTIALS_STORAGE_KEY,
+        JSON.stringify({
+          email,
+        })
+      );
+    }
+
     return {
-      email: String(credentials.email),
-      password: String(credentials.password),
+      email,
     };
   } catch {
     await clearSavedCredentials();
@@ -210,11 +182,10 @@ export async function loadSavedCredentials() {
   }
 }
 
-export async function saveCredentials(email, password) {
+export async function saveCredentials(email) {
   const normalizedEmail = String(email || "").trim();
-  const normalizedPassword = String(password || "");
 
-  if (!normalizedEmail || !normalizedPassword) {
+  if (!normalizedEmail) {
     await clearSavedCredentials();
     return;
   }
@@ -223,7 +194,6 @@ export async function saveCredentials(email, password) {
     CREDENTIALS_STORAGE_KEY,
     JSON.stringify({
       email: normalizedEmail,
-      password: normalizedPassword,
     })
   );
 }
@@ -263,41 +233,59 @@ function stripLeadingZeros(value) {
 }
 
 async function loginNative(email, password) {
-  const data = await nativeJsonRequest(`${GIRA_AUTH_URL}/login`, {
-    method: "POST",
-    headers: {
-      Priority: "high",
-      "User-Agent": USER_AGENT,
-    },
-    body: JSON.stringify({
-      Provider: "EmailPassword",
-      CredentialsEmailPassword: {
-        email,
-        password,
+  let data;
+
+  try {
+    data = await nativeJsonRequest(`${GIRA_AUTH_URL}/login`, {
+      method: "POST",
+      headers: {
+        Priority: "high",
+        "User-Agent": USER_AGENT,
       },
-    }),
-  });
+      body: JSON.stringify({
+        Provider: "EmailPassword",
+        CredentialsEmailPassword: {
+          email,
+          password,
+        },
+      }),
+    });
+  } catch (error) {
+    if (error?.status === 429) {
+      throw createError(
+        "The Gira authentication service is temporarily rate limiting requests.",
+        429
+      );
+    }
+    throw createError("The Gira email or password was not accepted.", error?.status || 401);
+  }
 
   if (!data?.data?.accessToken || !data?.data?.refreshToken) {
-    throw createError("The Gira authentication service rejected the request.", 401);
+    throw createError("The Gira email or password was not accepted.", 401);
   }
 
   return data.data;
 }
 
 async function refreshNativeSession(session) {
-  const data = await nativeJsonRequest(`${GIRA_AUTH_URL}/token/refresh`, {
-    method: "POST",
-    headers: {
-      "User-Agent": USER_AGENT,
-    },
-    body: JSON.stringify({
-      token: session.refreshToken,
-    }),
-  });
+  let data;
+
+  try {
+    data = await nativeJsonRequest(`${GIRA_AUTH_URL}/token/refresh`, {
+      method: "POST",
+      headers: {
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({
+        token: session.refreshToken,
+      }),
+    });
+  } catch (error) {
+    throw createError("Your Gira session expired. Please sign in again.", error?.status || 401);
+  }
 
   if (!data?.data?.accessToken || !data?.data?.refreshToken) {
-    throw createError("The Gira session refresh failed.", 401);
+    throw createError("Your Gira session expired. Please sign in again.", 401);
   }
 
   session.accessToken = data.data.accessToken;
