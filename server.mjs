@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const staticDirs = [path.join(__dirname, "dist"), path.join(__dirname, "public")];
+const sourceDir = path.join(__dirname, "src");
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
@@ -405,6 +406,22 @@ async function serveStatic(request, response) {
         };
       } catch {
         // try the next static root
+      }
+    }
+
+    if (relativePath.startsWith("/src/")) {
+      const safePath = path.resolve(__dirname, `.${relativePath}`);
+
+      if (safePath.startsWith(`${sourceDir}${path.sep}`)) {
+        try {
+          const file = await readFile(safePath);
+          return {
+            file,
+            safePath,
+          };
+        } catch {
+          // fall through to the 404 below
+        }
       }
     }
 
