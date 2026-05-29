@@ -149,7 +149,7 @@ function renderStationOptions() {
 
     const placeholderOption = document.createElement("option");
     placeholderOption.value = "";
-    placeholderOption.textContent = "Choose a station";
+    placeholderOption.textContent = state.stations.length === 0 ? "Refresh live stations first" : "Choose a station";
     selectElement.appendChild(placeholderOption);
 
     if (includeCurrentLocation) {
@@ -714,7 +714,7 @@ function renderPlan(plan) {
   if (!plan) {
     elements.summaryDetails.innerHTML = `
       <p class="summary-placeholder">
-        Load a live or demo snapshot, choose a start and finish station, then run the planner.
+        Connect your account, refresh live stations, choose a start and finish station, then run the planner.
       </p>
     `;
     elements.routeList.innerHTML = "";

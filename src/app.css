@@ -49,9 +49,7 @@ select {
 }
 
 .hero {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 20px;
+  display: block;
   margin-bottom: 20px;
   padding: 30px;
   border: 1px solid var(--border);
@@ -89,12 +87,6 @@ select {
   color: var(--muted);
   font-size: 1.05rem;
   line-height: 1.5;
-}
-
-.hero__meta {
-  display: grid;
-  gap: 14px;
-  align-content: start;
 }
 
 .stat-chip {
@@ -215,6 +207,44 @@ select:disabled {
   display: grid;
   gap: 14px;
   align-content: start;
+}
+
+.snapshot-disclosure {
+  margin-top: 18px;
+  border: 1px solid rgba(23, 35, 20, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.46);
+  overflow: hidden;
+}
+
+.snapshot-disclosure summary {
+  padding: 16px 18px;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+  list-style: none;
+}
+
+.snapshot-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.snapshot-disclosure summary::after {
+  content: "+";
+  float: right;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.snapshot-disclosure[open] summary::after {
+  content: "-";
+}
+
+.snapshot-details-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 18px 18px;
 }
 
 .primary-button,
@@ -497,12 +527,12 @@ select:disabled {
 }
 
 @media (max-width: 1080px) {
-  .hero,
   .auth-grid,
   .controls-grid,
   .summary-grid,
   .summary-breakdown,
-  .layout {
+  .layout,
+  .snapshot-details-grid {
     grid-template-columns: 1fr;
   }
 
