@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gira Grand Prix</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/app.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div class="hero__copy">
+          <p class="eyebrow">Lisbon Gira Route Optimizer</p>
+          <h1>Gira Grand Prix</h1>
+          <p class="lede">
+            Maximise points over a 2-hour window by chaining Gira rides between
+            high-occupation starts and high-empty finishes.
+          </p>
+        </div>
+        <div class="hero__meta">
+          <div class="stat-chip">
+            <span class="stat-chip__label">Snapshot</span>
+            <span class="stat-chip__value" id="snapshotSource">None loaded</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip__label">Stations</span>
+            <span class="stat-chip__value" id="stationCount">0</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip__label">Session</span>
+            <span class="stat-chip__value" id="sessionStatus">Signed out</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel panel--auth">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Step 1</p>
+              <h2>Load a snapshot</h2>
+            </div>
+            <button class="ghost-button" id="logoutButton" hidden>Log out</button>
+          </div>
+
+          <div class="auth-grid">
+            <form id="loginForm" class="login-form" autocomplete="on">
+              <label>
+                <span>Gira email</span>
+                <input id="emailInput" name="email" type="email" autocomplete="username" />
+              </label>
+              <label>
+                <span>Gira password</span>
+                <input
+                  id="passwordInput"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                />
+              </label>
+              <button type="submit" class="primary-button" id="loginButton">Sign in to Gira</button>
+            </form>
+
+            <div class="auth-side">
+              <button class="secondary-button" id="loadLiveButton" disabled>Refresh live stations</button>
+              <button class="ghost-button" id="demoButton">Use demo snapshot</button>
+              <p class="tiny-note" id="authSummary">
+                Live mode uses your own Gira account and keeps the session on this local machine only.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel--controls">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Step 2</p>
+              <h2>Set the challenge</h2>
+            </div>
+          </div>
+
+          <div class="controls-grid">
+            <label>
+              <span>Start station</span>
+              <select id="startInput" disabled>
+                <option value="">Load a snapshot first</option>
+              </select>
+            </label>
+            <label>
+              <span>Finish station</span>
+              <select id="endInput" disabled>
+                <option value="">Load a snapshot first</option>
+              </select>
+            </label>
+            <label>
+              <span>Time budget (minutes)</span>
+              <input id="budgetInput" type="number" min="15" max="240" step="5" value="120" />
+            </label>
+            <label>
+              <span>Average cycling speed (km/h)</span>
+              <input id="speedInput" type="number" min="5" max="35" step="0.5" value="15" />
+            </label>
+            <label>
+              <span>Street detour factor</span>
+              <input id="detourInput" type="number" min="1" max="2" step="0.01" value="1.22" />
+            </label>
+            <label>
+              <span>Per-ride overhead (minutes)</span>
+              <input id="overheadInput" type="number" min="0" max="5" step="0.25" value="1.25" />
+            </label>
+          </div>
+
+          <div class="actions-row">
+            <button class="primary-button" id="planButton" disabled>Find best strategy</button>
+            <p class="tiny-note" id="plannerNote">
+              The optimizer uses the live snapshot, a 30-second time grid, and station-to-station travel estimates.
+            </p>
+          </div>
+        </section>
+
+        <section class="panel panel--summary">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Step 3</p>
+              <h2>Best plan</h2>
+            </div>
+          </div>
+
+          <div class="summary-grid" id="summaryGrid">
+            <article class="summary-card">
+              <span class="summary-card__label">Points</span>
+              <strong class="summary-card__value" id="pointsValue">0</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Rides</span>
+              <strong class="summary-card__value" id="ridesValue">0</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Ride time</span>
+              <strong class="summary-card__value" id="timeValue">0m</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Distance</span>
+              <strong class="summary-card__value" id="distanceValue">0 km</strong>
+            </article>
+          </div>
+
+          <div class="summary-details" id="summaryDetails">
+            <p class="summary-placeholder">
+              Load a live or demo snapshot, choose a start and finish station, then run the planner.
+            </p>
+          </div>
+        </section>
+
+        <section class="panel panel--network">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Network view</p>
+              <h2>Spatial route sketch</h2>
+            </div>
+            <div class="legend">
+              <span><i class="legend__dot legend__dot--occupied"></i> Start bonus now</span>
+              <span><i class="legend__dot legend__dot--empty"></i> Finish bonus after docking</span>
+              <span><i class="legend__dot legend__dot--route"></i> Planned path</span>
+            </div>
+          </div>
+
+          <div class="network-stage">
+            <svg id="networkSvg" viewBox="0 0 1000 700" role="img" aria-label="Projected station network map"></svg>
+            <div class="network-tooltip" id="networkTooltip" hidden></div>
+          </div>
+        </section>
+
+        <section class="panel panel--route">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Ride sequence</p>
+              <h2>Leg-by-leg breakdown</h2>
+            </div>
+          </div>
+          <ol class="route-list" id="routeList"></ol>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="/src/app.js" type="module"></script>
+  </body>
+</html>

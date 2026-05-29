@@ -1,0 +1,14 @@
+{
+  "appId": "pt.giragrandprix.app",
+  "appName": "Gira Grand Prix",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": {},
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  },
+  "ios": {
+    "scheme": "GiraGrandPrix"
+  }
+}
