@@ -153,6 +153,10 @@ select {
   gap: 20px;
 }
 
+.panel--auth-signed-in .auth-grid {
+  grid-template-columns: 1fr;
+}
+
 .login-form,
 .controls-grid {
   display: grid;
@@ -216,6 +220,10 @@ select:disabled {
   align-content: start;
 }
 
+.panel--auth-signed-in .auth-side {
+  max-width: 42rem;
+}
+
 .snapshot-disclosure {
   margin-top: 18px;
   border: 1px solid rgba(23, 35, 20, 0.08);
@@ -255,6 +263,10 @@ select:disabled {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  padding: 0 18px 18px;
+}
+
+.snapshot-actions {
   padding: 0 18px 18px;
 }
 

@@ -26,7 +26,7 @@
       </header>
 
       <main class="layout">
-        <section class="panel panel--auth">
+        <section class="panel panel--auth" id="authPanel">
           <div class="panel__header">
             <div>
               <p class="panel__eyebrow">Step 1</p>
@@ -54,7 +54,6 @@
             </form>
 
             <div class="auth-side">
-              <button class="secondary-button" id="loadLiveButton" disabled>Refresh live stations</button>
               <button class="ghost-button" id="demoButton" hidden>Use demo snapshot</button>
               <p class="tiny-note" id="authSummary">
                 Live mode uses your own Gira account and keeps the session in this browser only.
@@ -77,6 +76,9 @@
                 <span class="stat-chip__label">Session</span>
                 <span class="stat-chip__value" id="sessionStatus">Signed out</span>
               </div>
+            </div>
+            <div class="snapshot-actions">
+              <button class="secondary-button" id="loadLiveButton" hidden disabled>Refresh live stations</button>
             </div>
           </details>
         </section>

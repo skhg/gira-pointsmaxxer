@@ -48,6 +48,7 @@ const state = {
 };
 
 const elements = {
+  authPanel: document.getElementById("authPanel"),
   authSummary: document.getElementById("authSummary"),
   currentLocationButton: document.getElementById("currentLocationButton"),
   demoButton: document.getElementById("demoButton"),
@@ -369,10 +370,14 @@ function renderStationOptions() {
 function setUser(user) {
   state.user = user;
   const authenticated = Boolean(user);
+  elements.authPanel.classList.toggle("panel--auth-signed-in", authenticated);
+  elements.loginForm.hidden = authenticated;
   elements.sessionStatus.textContent = authenticated ? user.name || user.email || "Signed in" : "Signed out";
   elements.logoutButton.hidden = !authenticated;
+  elements.loadLiveButton.hidden = !authenticated;
   elements.loadLiveButton.disabled = !authenticated;
   elements.loginButton.disabled = false;
+  elements.demoButton.hidden = authenticated || !isLocalDevelopmentHost();
   elements.authSummary.textContent = authenticated
     ? `Signed in as ${user.name || user.email}. Live snapshots stay server-side for this app, and the saved sign-in stays in this browser until you log out.`
     : "Live mode uses your own Gira account and can remember your sign-in in this browser between refreshes until you log out.";
