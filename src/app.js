@@ -153,14 +153,22 @@ function formatClockTime(date) {
   }).format(date);
 }
 
+function formatMinuteValue(value, decimals = 0) {
+  const safeValue = Math.max(0, Number(value) || 0);
+  const displayValue = decimals > 0 ? safeValue.toFixed(decimals) : String(Math.floor(safeValue));
+  const numericValue = Number(displayValue);
+  const unit = Math.abs(numericValue - 1) < 1e-9 ? "min" : "mins";
+  return `${displayValue} ${unit}`;
+}
+
 function formatRemainingTime(minutes) {
   const totalMinutes = Math.max(0, Math.floor(minutes));
-  if (totalMinutes < 60) return `${totalMinutes} min`;
+  if (totalMinutes < 60) return formatMinuteValue(totalMinutes);
 
   const hours = Math.floor(totalMinutes / 60);
   const remainder = totalMinutes % 60;
   if (remainder === 0) return `${hours}h`;
-  return `${hours}h ${remainder}m`;
+  return `${hours}h ${formatMinuteValue(remainder)}`;
 }
 
 function roundUpToStep(date, stepMinutes) {
@@ -915,11 +923,12 @@ function computeOptimalPlan(config) {
 }
 
 function formatMinutes(minutes) {
-  if (!Number.isFinite(minutes)) return "0m";
-  if (minutes < 60) return `${minutes.toFixed(1)}m`;
+  if (!Number.isFinite(minutes)) return "0 mins";
+  if (minutes < 60) return formatMinuteValue(minutes, 1);
   const hours = Math.floor(minutes / 60);
   const remainder = minutes - hours * 60;
-  return `${hours}h ${remainder.toFixed(1)}m`;
+  if (remainder < 0.05) return `${hours}h`;
+  return `${hours}h ${formatMinuteValue(remainder, 1)}`;
 }
 
 function renderPlan(plan) {
@@ -927,7 +936,7 @@ function renderPlan(plan) {
 
   elements.pointsValue.textContent = plan ? String(plan.points) : "0";
   elements.ridesValue.textContent = plan ? String(plan.rides) : "0";
-  elements.timeValue.textContent = plan ? formatMinutes(plan.totalTravelMinutes) : "0m";
+  elements.timeValue.textContent = plan ? formatMinutes(plan.totalTravelMinutes) : "0 mins";
   elements.distanceValue.textContent = plan ? `${plan.totalDistanceKm.toFixed(1)} km` : "0 km";
 
   if (!plan) {
