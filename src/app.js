@@ -90,6 +90,43 @@ function showToast(message, type = "info") {
   }, 4000);
 }
 
+function hideNetworkTooltip() {
+  elements.networkTooltip.hidden = true;
+  delete elements.networkTooltip.dataset.stationCode;
+}
+
+function positionNetworkTooltip(position) {
+  const tooltip = elements.networkTooltip;
+  const stageRect = elements.networkSvg.getBoundingClientRect();
+  const tooltipWidth = tooltip.offsetWidth || 220;
+  const tooltipHeight = tooltip.offsetHeight || 96;
+  const margin = 12;
+
+  const left = Math.min(
+    Math.max(position.x + margin, margin),
+    Math.max(margin, stageRect.width - tooltipWidth - margin)
+  );
+  const top = Math.min(
+    Math.max(position.y + margin, margin),
+    Math.max(margin, stageRect.height - tooltipHeight - margin)
+  );
+
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function showNetworkTooltip(station, position) {
+  elements.networkTooltip.dataset.stationCode = station.code;
+  elements.networkTooltip.innerHTML = `
+    <strong>${escapeHtml(station.label)}</strong>
+    <div>${station.bikes}/${station.docks} bikes occupied</div>
+    <div>Start bonus now: ${occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD ? "Yes" : "No"}</div>
+    <div>Finish bonus after docking: ${finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD ? "Yes" : "No"}</div>
+  `;
+  elements.networkTooltip.hidden = false;
+  positionNetworkTooltip(position);
+}
+
 function isLocalDevelopmentHost() {
   return ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname || "");
 }
@@ -337,7 +374,7 @@ function setUser(user) {
   elements.loadLiveButton.disabled = !authenticated;
   elements.loginButton.disabled = false;
   elements.authSummary.textContent = authenticated
-    ? `Signed in as ${user.name || user.email}. Live snapshots stay server-side on this local app instance, and the saved sign-in stays on this browser until you log out.`
+    ? `Signed in as ${user.name || user.email}. Live snapshots stay server-side for this app, and the saved sign-in stays in this browser until you log out.`
     : "Live mode uses your own Gira account and can remember your sign-in in this browser between refreshes until you log out.";
 }
 
@@ -364,6 +401,7 @@ async function login(event) {
   try {
     const data = await loginWithGira(email, password);
     await saveCredentials(email).catch(() => null);
+    elements.passwordInput.value = "";
 
     setUser(data.user);
     showToast("Signed in. Loading the latest Gira snapshot...");
@@ -894,11 +932,18 @@ function renderPlan(plan) {
 
   const occupiedNow = state.stations.filter(station => occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD).length;
   const emptyAfterDock = state.stations.filter(station => finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD).length;
+  const safeNearestStationLabel = plan.startOrigin ? escapeHtml(plan.startStation.label) : "";
+  const safePickupLabel =
+    plan.bikePickupStation.code !== plan.startStation.code
+      ? escapeHtml(plan.bikePickupStation.label)
+      : "";
+  const safeStartLabel = escapeHtml(plan.startOrigin ? "Current location" : plan.startStation.label);
+  const safeEndLabel = escapeHtml(plan.endStation.label);
   const nearestStationMarkup = plan.startOrigin
     ? `
       <div>
         <dt>Nearest station</dt>
-        <dd>${plan.startStation.label}</dd>
+        <dd>${safeNearestStationLabel}</dd>
       </div>
     `
     : "";
@@ -906,7 +951,7 @@ function renderPlan(plan) {
     ? `
       <div>
         <dt>Bike pickup station</dt>
-        <dd>${plan.bikePickupStation.label}</dd>
+        <dd>${safePickupLabel}</dd>
       </div>
     `
     : "";
@@ -935,11 +980,11 @@ function renderPlan(plan) {
       </div>
       <div>
         <dt>Start</dt>
-        <dd>${plan.startOrigin ? "Current location" : plan.startStation.label}</dd>
+        <dd>${safeStartLabel}</dd>
       </div>
       <div>
         <dt>Finish</dt>
-        <dd>${plan.endStation.label}</dd>
+        <dd>${safeEndLabel}</dd>
       </div>
       ${nearestStationMarkup}
       ${pickupMarkup}
@@ -1153,12 +1198,19 @@ function renderStepTitle(step) {
 
 function drawNetwork() {
   const svg = elements.networkSvg;
-  const tooltip = elements.networkTooltip;
   const stations = state.stations;
   const focusStations = getFocusStations();
   const { projected, visibleStations } = projectStations(stations, focusStations);
+  const viewBox = svg.viewBox.baseVal;
+  const viewBoxWidth = viewBox?.width || 1000;
+  const viewBoxHeight = viewBox?.height || 700;
 
   svg.innerHTML = "";
+  hideNetworkTooltip();
+
+  svg.onclick = () => {
+    hideNetworkTooltip();
+  };
 
   const background = document.createElementNS("http://www.w3.org/2000/svg", "g");
   for (let index = 0; index < 7; index += 1) {
@@ -1286,6 +1338,8 @@ function drawNetwork() {
     if (!point) return;
 
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    group.setAttribute("role", "button");
+    group.setAttribute("tabindex", "0");
     const category = classifyStation(station);
     const isInRoute = routeCodes.has(station.code);
     const fill =
@@ -1322,20 +1376,41 @@ function drawNetwork() {
       group.appendChild(label);
     }
 
+    const fixedTooltipPosition = {
+      x: (point.x / viewBoxWidth) * svg.clientWidth,
+      y: (point.y / viewBoxHeight) * svg.clientHeight,
+    };
+
     group.addEventListener("mousemove", event => {
-      tooltip.hidden = false;
-      tooltip.style.left = `${event.offsetX}px`;
-      tooltip.style.top = `${event.offsetY}px`;
-      tooltip.innerHTML = `
-        <strong>${escapeHtml(station.label)}</strong>
-        <div>${station.bikes}/${station.docks} bikes occupied</div>
-        <div>Start bonus now: ${occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD ? "Yes" : "No"}</div>
-        <div>Finish bonus after docking: ${finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD ? "Yes" : "No"}</div>
-      `;
+      showNetworkTooltip(station, {
+        x: event.offsetX,
+        y: event.offsetY,
+      });
     });
 
     group.addEventListener("mouseleave", () => {
-      tooltip.hidden = true;
+      hideNetworkTooltip();
+    });
+
+    group.addEventListener("click", event => {
+      event.stopPropagation();
+      const isSameStationOpen =
+        !elements.networkTooltip.hidden &&
+        elements.networkTooltip.dataset.stationCode === station.code;
+
+      if (isSameStationOpen) {
+        hideNetworkTooltip();
+        return;
+      }
+
+      showNetworkTooltip(station, fixedTooltipPosition);
+    });
+
+    group.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      showNetworkTooltip(station, fixedTooltipPosition);
     });
 
     svg.appendChild(group);

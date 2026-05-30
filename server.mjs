@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -12,6 +12,8 @@ const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
 const SESSION_COOKIE = "gira_planner_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
+const LOGIN_WINDOW_MS = 1000 * 60 * 10;
+const LOGIN_MAX_ATTEMPTS = 8;
 
 const GIRA_AUTH_URL = "https://c2g091p01.emel.pt/auth";
 const GIRA_GRAPHQL_URL = "https://c2g091p01.emel.pt/ws/graphql";
@@ -19,8 +21,22 @@ const GIRA_PUBLIC_STATIONS_URL =
   "https://dados.emel.pt/dataset/57181518-0708-4fb5-a7d1-69875dee8478/resource/d1950d9d-26be-4ced-b1c4-9af65c8d2c70/download/girastations.json";
 const USER_AGENT = "Gira/3.4.3 (Android 34)";
 const PUBLIC_STATIONS_TTL_MS = 1000 * 60 * 60 * 12;
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "connect-src 'self'",
+  "font-src 'self' https://fonts.gstatic.com",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "upgrade-insecure-requests",
+].join("; ");
 
 const sessions = new Map();
+const loginAttempts = new Map();
 let publicStationsCache = {
   expiresAt: 0,
   stations: [],
@@ -101,10 +117,20 @@ function redactSensitiveText(value, secrets = []) {
   return text;
 }
 
+const securityHeaders = {
+  "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+  "Permissions-Policy": "geolocation=(self)",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
+
 function writeJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
+    ...securityHeaders,
     ...headers,
   });
   response.end(JSON.stringify(payload));
@@ -161,19 +187,79 @@ function clearSession(sessionId) {
   if (sessionId) sessions.delete(sessionId);
 }
 
-function setSessionCookie(response, sessionId) {
+function isSecureRequest(request) {
+  const forwardedProto = request.headers["x-forwarded-proto"];
+  if (typeof forwardedProto === "string" && forwardedProto.trim()) {
+    return forwardedProto.split(",")[0].trim().toLowerCase() === "https";
+  }
+
+  return Boolean(request.socket?.encrypted);
+}
+
+function requestClientIp(request) {
+  const forwardedFor = request.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  return request.socket.remoteAddress || "unknown";
+}
+
+function pruneLoginAttemptBucket(bucket, now = Date.now()) {
+  return bucket.filter(timestamp => now - timestamp < LOGIN_WINDOW_MS);
+}
+
+function getActiveLoginAttempts(ipAddress, now = Date.now()) {
+  const bucket = pruneLoginAttemptBucket(loginAttempts.get(ipAddress) || [], now);
+  if (bucket.length === 0) {
+    loginAttempts.delete(ipAddress);
+    return [];
+  }
+
+  loginAttempts.set(ipAddress, bucket);
+  return bucket;
+}
+
+function assertLoginRateLimit(request) {
+  const ipAddress = requestClientIp(request);
+  const attempts = getActiveLoginAttempts(ipAddress);
+  if (attempts.length >= LOGIN_MAX_ATTEMPTS) {
+    throw {
+      statusCode: 429,
+      message: "Too many sign-in attempts from this network. Please wait 10 minutes and try again.",
+    };
+  }
+
+  return ipAddress;
+}
+
+function recordLoginAttempt(ipAddress, successful) {
+  if (!ipAddress) return;
+  if (successful) {
+    loginAttempts.delete(ipAddress);
+    return;
+  }
+
+  const attempts = getActiveLoginAttempts(ipAddress);
+  attempts.push(Date.now());
+  loginAttempts.set(ipAddress, attempts);
+}
+
+function setSessionCookie(request, response, sessionId) {
+  const secureAttribute = isSecureRequest(request) ? "; Secure" : "";
   response.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${
+    `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=${
       SESSION_TTL_MS / 1000
     }`
   );
 }
 
-function clearSessionCookie(response) {
+function clearSessionCookie(request, response) {
+  const secureAttribute = isSecureRequest(request) ? "; Secure" : "";
   response.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
+    `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=0`
   );
 }
 
@@ -417,7 +503,22 @@ function cleanupSessions() {
   }
 }
 
-setInterval(cleanupSessions, 1000 * 60 * 15).unref();
+function cleanupLoginAttempts() {
+  const now = Date.now();
+  for (const [ipAddress, timestamps] of loginAttempts) {
+    const activeTimestamps = pruneLoginAttemptBucket(timestamps, now);
+    if (activeTimestamps.length === 0) {
+      loginAttempts.delete(ipAddress);
+    } else {
+      loginAttempts.set(ipAddress, activeTimestamps);
+    }
+  }
+}
+
+setInterval(() => {
+  cleanupSessions();
+  cleanupLoginAttempts();
+}, 1000 * 60 * 15).unref();
 
 async function serveStatic(request, response) {
   const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
@@ -472,6 +573,7 @@ async function serveStatic(request, response) {
     response.writeHead(200, {
       "Cache-Control": cacheControl,
       "Content-Type": contentTypes[ext] || "application/octet-stream",
+      ...securityHeaders,
     });
     response.end(asset.file);
     return;
@@ -483,6 +585,7 @@ async function serveStatic(request, response) {
       response.writeHead(200, {
         "Cache-Control": "no-store",
         "Content-Type": "text/html; charset=utf-8",
+        ...securityHeaders,
       });
       response.end(spaEntry.file);
       return;
@@ -492,13 +595,6 @@ async function serveStatic(request, response) {
   writeJson(response, 404, {
     error: "Not found.",
   });
-}
-
-function requestFingerprint(request) {
-  return createHash("sha1")
-    .update(`${request.socket.remoteAddress ?? "unknown"}|${request.headers["user-agent"] ?? "unknown"}`)
-    .digest("hex")
-    .slice(0, 10);
 }
 
 const server = createServer(async (request, response) => {
@@ -532,14 +628,23 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const tokens = await loginToGira(email, password);
+      const ipAddress = assertLoginRateLimit(request);
+      let successfulLogin = false;
+      const tokens = await loginToGira(email, password)
+        .then(result => {
+          successfulLogin = true;
+          return result;
+        })
+        .finally(() => {
+          recordLoginAttempt(ipAddress, successfulLogin);
+        });
       const session = createSession(tokens, {
         email,
         name: email,
       });
 
       await fetchUser(session).catch(() => null);
-      setSessionCookie(response, session.id);
+      setSessionCookie(request, response, session.id);
       writeJson(response, 200, sessionSummary(session));
       return;
     }
@@ -547,7 +652,7 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/logout" && method === "POST") {
       const cookies = parseCookies(request.headers.cookie);
       clearSession(cookies[SESSION_COOKIE]);
-      clearSessionCookie(response);
+      clearSessionCookie(request, response);
       writeJson(response, 200, {
         authenticated: false,
       });
@@ -579,8 +684,6 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/health" && method === "GET") {
       writeJson(response, 200, {
         ok: true,
-        sessions: sessions.size,
-        fingerprint: requestFingerprint(request),
       });
       return;
     }
