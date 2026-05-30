@@ -32,6 +32,39 @@ npm run dev
 
 The Vite dev server runs on `http://localhost:5173` and proxies `/api/*` to the Node server on `127.0.0.1:8787`.
 
+## Project layout
+
+- `src/`: production browser code and shared planner logic
+- `server.mjs`: production Node server and API entrypoint
+- `test/`: automated unit, server, and browser smoke tests
+- `testing/fixtures/`: non-production fixtures used for local demos and tests
+
+The bundled demo stations now live in [testing/fixtures/demo-stations.js](/Users/een2cok/workspace/gira%20grand%20prix/testing/fixtures/demo-stations.js) instead of inside the UI file, so the application code and test/demo data stay clearly separated.
+
+## Test coverage
+
+Run the automated checks with:
+
+```bash
+npm test
+```
+
+Or run them individually:
+
+```bash
+npm run test:unit
+npm run test:server
+npm run test:browser
+```
+
+Current automated coverage focuses on:
+
+- planner scoring and route-selection logic in [src/lib/planner.js](/Users/een2cok/workspace/gira%20grand%20prix/src/lib/planner.js)
+- auth cookie/session recovery and login rate limiting in [server.mjs](/Users/een2cok/workspace/gira%20grand%20prix/server.mjs)
+- a built-app browser smoke flow that loads the demo snapshot and produces a route end to end
+
+The browser smoke test uses local Google Chrome via `playwright-core`, and the server tests call the app handler directly so they do not need live Gira credentials or network access.
+
 ## Put it online fast
 
 The fastest way to try the current app on your phone is to deploy the existing Node service to Render.
@@ -91,5 +124,5 @@ Defaults:
 ## Notes
 
 - The localhost Node server is still useful for browser-based development.
-- A bundled demo snapshot is included for local testing and development.
+- A bundled demo snapshot is included for local testing and development through the separated fixture module in `testing/fixtures/`.
 - The literal scoring optimum can still be a repeatable back-and-forth loop when the same ride keeps qualifying for both bonuses.

@@ -1,15 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const staticDirs = [path.join(__dirname, "dist"), path.join(__dirname, "public")];
-const sourceDir = path.join(__dirname, "src");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DEFAULT_STATIC_DIRS = [path.join(__dirname, "dist"), path.join(__dirname, "public")];
+const DEFAULT_SOURCE_DIR = path.join(__dirname, "src");
 
-const HOST = process.env.HOST || "0.0.0.0";
-const PORT = Number(process.env.PORT || 8787);
+export const HOST = process.env.HOST || "0.0.0.0";
+export const PORT = Number(process.env.PORT || 8787);
+
 const SESSION_COOKIE = "gira_planner_session";
 const REFRESH_COOKIE = "gira_planner_refresh";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
@@ -36,13 +38,6 @@ const CONTENT_SECURITY_POLICY = [
   "upgrade-insecure-requests",
 ].join("; ");
 
-const sessions = new Map();
-const loginAttempts = new Map();
-let publicStationsCache = {
-  expiresAt: 0,
-  stations: [],
-};
-
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -50,6 +45,15 @@ const contentTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8",
+};
+
+const securityHeaders = {
+  "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+  "Permissions-Policy": "geolocation=(self)",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
 };
 
 function parseCookies(header = "") {
@@ -118,15 +122,6 @@ function redactSensitiveText(value, secrets = []) {
   return text;
 }
 
-const securityHeaders = {
-  "Content-Security-Policy": CONTENT_SECURITY_POLICY,
-  "Permissions-Policy": "geolocation=(self)",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-};
-
 function writeJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     "Cache-Control": "no-store",
@@ -152,25 +147,6 @@ async function readJsonBody(request) {
   }
 }
 
-function createSession(tokens, user) {
-  const id = randomUUID();
-  const session = {
-    id,
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    expiration: tokens.expiration,
-    user,
-    createdAt: Date.now(),
-    expiresAt: Date.now() + SESSION_TTL_MS,
-  };
-  sessions.set(id, session);
-  return session;
-}
-
-function clearSession(sessionId) {
-  if (sessionId) sessions.delete(sessionId);
-}
-
 function isSecureRequest(request) {
   const forwardedProto = request.headers["x-forwarded-proto"];
   if (typeof forwardedProto === "string" && forwardedProto.trim()) {
@@ -193,42 +169,6 @@ function pruneLoginAttemptBucket(bucket, now = Date.now()) {
   return bucket.filter(timestamp => now - timestamp < LOGIN_WINDOW_MS);
 }
 
-function getActiveLoginAttempts(ipAddress, now = Date.now()) {
-  const bucket = pruneLoginAttemptBucket(loginAttempts.get(ipAddress) || [], now);
-  if (bucket.length === 0) {
-    loginAttempts.delete(ipAddress);
-    return [];
-  }
-
-  loginAttempts.set(ipAddress, bucket);
-  return bucket;
-}
-
-function assertLoginRateLimit(request) {
-  const ipAddress = requestClientIp(request);
-  const attempts = getActiveLoginAttempts(ipAddress);
-  if (attempts.length >= LOGIN_MAX_ATTEMPTS) {
-    throw {
-      statusCode: 429,
-      message: "Too many sign-in attempts from this network. Please wait 10 minutes and try again.",
-    };
-  }
-
-  return ipAddress;
-}
-
-function recordLoginAttempt(ipAddress, successful) {
-  if (!ipAddress) return;
-  if (successful) {
-    loginAttempts.delete(ipAddress);
-    return;
-  }
-
-  const attempts = getActiveLoginAttempts(ipAddress);
-  attempts.push(Date.now());
-  loginAttempts.set(ipAddress, attempts);
-}
-
 function buildCookieAttributes(request, maxAgeSeconds) {
   const secureAttribute = isSecureRequest(request) ? "; Secure" : "";
   return `HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=${maxAgeSeconds}`;
@@ -236,13 +176,10 @@ function buildCookieAttributes(request, maxAgeSeconds) {
 
 function setAuthCookies(request, response, session) {
   const cookieAttributes = buildCookieAttributes(request, SESSION_TTL_MS / 1000);
-  response.setHeader(
-    "Set-Cookie",
-    [
-      `${SESSION_COOKIE}=${encodeURIComponent(session.id)}; ${cookieAttributes}`,
-      `${REFRESH_COOKIE}=${encodeURIComponent(session.refreshToken)}; ${cookieAttributes}`,
-    ]
-  );
+  response.setHeader("Set-Cookie", [
+    `${SESSION_COOKIE}=${encodeURIComponent(session.id)}; ${cookieAttributes}`,
+    `${REFRESH_COOKIE}=${encodeURIComponent(session.refreshToken)}; ${cookieAttributes}`,
+  ]);
 }
 
 function clearAuthCookies(request, response) {
@@ -289,7 +226,7 @@ function sanitizeAuthFailure(status, context = "login") {
   };
 }
 
-async function loginToGira(email, password) {
+async function defaultLoginToGira(email, password) {
   const response = await upstreamJson(`${GIRA_AUTH_URL}/login`, {
     method: "POST",
     headers: {
@@ -313,7 +250,7 @@ async function loginToGira(email, password) {
   return response.body.data;
 }
 
-async function refreshSession(session) {
+async function defaultRefreshSession(session) {
   const response = await upstreamJson(`${GIRA_AUTH_URL}/token/refresh`, {
     method: "POST",
     headers: {
@@ -332,11 +269,10 @@ async function refreshSession(session) {
   session.accessToken = response.body.data.accessToken;
   session.refreshToken = response.body.data.refreshToken;
   session.expiration = response.body.data.expiration;
-  session.expiresAt = Date.now() + SESSION_TTL_MS;
   return session;
 }
 
-async function fetchUser(session) {
+async function defaultFetchUser(session) {
   const response = await upstreamJson(`${GIRA_AUTH_URL}/user`, {
     method: "GET",
     headers: {
@@ -357,43 +293,50 @@ async function fetchUser(session) {
   return session.user;
 }
 
-async function loadPublicStations() {
-  if (publicStationsCache.expiresAt > Date.now() && publicStationsCache.stations.length > 0) {
-    return publicStationsCache.stations;
-  }
-
-  const response = await upstreamJson(GIRA_PUBLIC_STATIONS_URL, {
-    method: "GET",
-    headers: {
-      "User-Agent": USER_AGENT,
-    },
-  });
-
-  if (!response.ok || !Array.isArray(response.body)) {
-    throw {
-      statusCode: response.status || 502,
-      message: "The EMEL public station catalog is unavailable.",
-    };
-  }
-
-  publicStationsCache = {
-    expiresAt: Date.now() + PUBLIC_STATIONS_TTL_MS,
-    stations: response.body
-      .map(station => ({
-        latitude: Number(station.latitude),
-        longitude: Number(station.longitude),
-        normalizedName: normalizeStationName(station.estacaolocalizacao),
-        shortCode: String(station.id_expl),
-      }))
-      .filter(
-        station =>
-          station.shortCode &&
-          Number.isFinite(station.latitude) &&
-          Number.isFinite(station.longitude)
-      ),
+function createDefaultPublicStationsLoader() {
+  let publicStationsCache = {
+    expiresAt: 0,
+    stations: [],
   };
 
-  return publicStationsCache.stations;
+  return async function loadPublicStations() {
+    if (publicStationsCache.expiresAt > Date.now() && publicStationsCache.stations.length > 0) {
+      return publicStationsCache.stations;
+    }
+
+    const response = await upstreamJson(GIRA_PUBLIC_STATIONS_URL, {
+      method: "GET",
+      headers: {
+        "User-Agent": USER_AGENT,
+      },
+    });
+
+    if (!response.ok || !Array.isArray(response.body)) {
+      throw {
+        statusCode: response.status || 502,
+        message: "The EMEL public station catalog is unavailable.",
+      };
+    }
+
+    publicStationsCache = {
+      expiresAt: Date.now() + PUBLIC_STATIONS_TTL_MS,
+      stations: response.body
+        .map(station => ({
+          latitude: Number(station.latitude),
+          longitude: Number(station.longitude),
+          normalizedName: normalizeStationName(station.estacaolocalizacao),
+          shortCode: String(station.id_expl),
+        }))
+        .filter(
+          station =>
+            station.shortCode &&
+            Number.isFinite(station.latitude) &&
+            Number.isFinite(station.longitude)
+        ),
+    };
+
+    return publicStationsCache.stations;
+  };
 }
 
 function matchPublicStation(liveStation, publicStations) {
@@ -425,58 +368,60 @@ function matchPublicStation(liveStation, publicStations) {
   return null;
 }
 
-async function fetchStations(session, retry = true) {
-  const response = await upstreamJson(GIRA_GRAPHQL_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.accessToken}`,
-      "Content-Type": "application/json",
-      "User-Agent": USER_AGENT,
-    },
-    body: JSON.stringify({
-      operationName: "getStations",
-      variables: {},
-      query:
-        "query getStations {getStations { code, description, latitude, longitude, name, bikes, docks, serialNumber, assetStatus }}",
-    }),
-  });
-
-  if (response.status === 401 && retry) {
-    await refreshSession(session);
-    return fetchStations(session, false);
-  }
-
-  if (!response.ok || !response.body?.data?.getStations) {
-    throw {
-      code: response.status,
-      message: "The Gira live station API did not return a usable snapshot.",
-    };
-  }
-
-  const publicStations = await loadPublicStations().catch(() => []);
-
-  return response.body.data.getStations
-    .filter(station => station && station.code && station.serialNumber)
-    .map(station => {
-      const normalizedStation = {
-        assetStatus: station.assetStatus || "unknown",
-        bikes: Number(station.bikes ?? 0),
-        code: String(station.code),
-        description: station.description || null,
-        docks: Number(station.docks ?? 0),
-        latitude: Number(station.latitude),
-        longitude: Number(station.longitude),
-        name: station.name || station.description || `Station ${station.code}`,
-        serialNumber: String(station.serialNumber),
-      };
-
-      const publicMatch = matchPublicStation(normalizedStation, publicStations);
-
-      return {
-        ...normalizedStation,
-        displayCode: publicMatch?.shortCode || stripLeadingZeros(normalizedStation.code),
-      };
+function createDefaultStationFetcher({ refreshSession, loadPublicStations }) {
+  return async function fetchStations(session, retry = true) {
+    const response = await upstreamJson(GIRA_GRAPHQL_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({
+        operationName: "getStations",
+        variables: {},
+        query:
+          "query getStations {getStations { code, description, latitude, longitude, name, bikes, docks, serialNumber, assetStatus }}",
+      }),
     });
+
+    if (response.status === 401 && retry) {
+      await refreshSession(session);
+      return fetchStations(session, false);
+    }
+
+    if (!response.ok || !response.body?.data?.getStations) {
+      throw {
+        code: response.status,
+        message: "The Gira live station API did not return a usable snapshot.",
+      };
+    }
+
+    const publicStations = await loadPublicStations().catch(() => []);
+
+    return response.body.data.getStations
+      .filter(station => station && station.code && station.serialNumber)
+      .map(station => {
+        const normalizedStation = {
+          assetStatus: station.assetStatus || "unknown",
+          bikes: Number(station.bikes ?? 0),
+          code: String(station.code),
+          description: station.description || null,
+          docks: Number(station.docks ?? 0),
+          latitude: Number(station.latitude),
+          longitude: Number(station.longitude),
+          name: station.name || station.description || `Station ${station.code}`,
+          serialNumber: String(station.serialNumber),
+        };
+
+        const publicMatch = matchPublicStation(normalizedStation, publicStations);
+
+        return {
+          ...normalizedStation,
+          displayCode: publicMatch?.shortCode || stripLeadingZeros(normalizedStation.code),
+        };
+      });
+  };
 }
 
 function sessionSummary(session) {
@@ -486,102 +431,168 @@ function sessionSummary(session) {
   };
 }
 
-async function recoverSessionFromRefreshCookie(request) {
-  const cookies = parseCookies(request.headers.cookie);
-  const refreshToken = String(cookies[REFRESH_COOKIE] || "").trim();
-  if (!refreshToken) return null;
+export function createAppServer(options = {}) {
+  const {
+    clearIntervalFn = globalThis.clearInterval,
+    fetchUser = defaultFetchUser,
+    host = HOST,
+    loadPublicStations = createDefaultPublicStationsLoader(),
+    loginToGira = defaultLoginToGira,
+    now = () => Date.now(),
+    port = PORT,
+    refreshSession = defaultRefreshSession,
+    setIntervalFn = globalThis.setInterval,
+    sourceDirectory = DEFAULT_SOURCE_DIR,
+    staticDirectories = DEFAULT_STATIC_DIRS,
+  } = options;
+  const fetchStations =
+    options.fetchStations ||
+    createDefaultStationFetcher({
+      loadPublicStations,
+      refreshSession,
+    });
 
-  const recoveredSession = {
-    id: randomUUID(),
-    accessToken: "",
-    refreshToken,
-    expiration: 0,
-    user: null,
-    createdAt: Date.now(),
-    expiresAt: Date.now() + SESSION_TTL_MS,
-    needsCookieSync: true,
-  };
+  const sessions = new Map();
+  const loginAttempts = new Map();
 
-  try {
-    await refreshSession(recoveredSession);
-    sessions.set(recoveredSession.id, recoveredSession);
-    return recoveredSession;
-  } catch {
-    request.__clearAuthCookies = true;
-    return null;
+  function createSession(tokens, user) {
+    const timestamp = now();
+    const session = {
+      id: randomUUID(),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiration: tokens.expiration,
+      user,
+      createdAt: timestamp,
+      expiresAt: timestamp + SESSION_TTL_MS,
+    };
+    sessions.set(session.id, session);
+    return session;
   }
-}
 
-function cleanupSessions() {
-  const now = Date.now();
-  for (const [id, session] of sessions) {
-    if (session.expiresAt <= now) sessions.delete(id);
+  function clearSession(sessionId) {
+    if (sessionId) sessions.delete(sessionId);
   }
-}
 
-function cleanupLoginAttempts() {
-  const now = Date.now();
-  for (const [ipAddress, timestamps] of loginAttempts) {
-    const activeTimestamps = pruneLoginAttemptBucket(timestamps, now);
-    if (activeTimestamps.length === 0) {
+  function getActiveLoginAttempts(ipAddress, timestamp = now()) {
+    const bucket = pruneLoginAttemptBucket(loginAttempts.get(ipAddress) || [], timestamp);
+    if (bucket.length === 0) {
       loginAttempts.delete(ipAddress);
-    } else {
-      loginAttempts.set(ipAddress, activeTimestamps);
+      return [];
+    }
+
+    loginAttempts.set(ipAddress, bucket);
+    return bucket;
+  }
+
+  function assertLoginRateLimit(request) {
+    const ipAddress = requestClientIp(request);
+    const attempts = getActiveLoginAttempts(ipAddress);
+    if (attempts.length >= LOGIN_MAX_ATTEMPTS) {
+      throw {
+        statusCode: 429,
+        message: "Too many sign-in attempts from this network. Please wait 10 minutes and try again.",
+      };
+    }
+
+    return ipAddress;
+  }
+
+  function recordLoginAttempt(ipAddress, successful) {
+    if (!ipAddress) return;
+    if (successful) {
+      loginAttempts.delete(ipAddress);
+      return;
+    }
+
+    const attempts = getActiveLoginAttempts(ipAddress);
+    attempts.push(now());
+    loginAttempts.set(ipAddress, attempts);
+  }
+
+  async function recoverSessionFromRefreshCookie(request) {
+    const cookies = parseCookies(request.headers.cookie);
+    const refreshToken = String(cookies[REFRESH_COOKIE] || "").trim();
+    if (!refreshToken) return null;
+
+    const recoveredSession = {
+      id: randomUUID(),
+      accessToken: "",
+      refreshToken,
+      expiration: 0,
+      user: null,
+      createdAt: now(),
+      expiresAt: now() + SESSION_TTL_MS,
+      needsCookieSync: true,
+    };
+
+    try {
+      await refreshSession(recoveredSession);
+      recoveredSession.expiresAt = now() + SESSION_TTL_MS;
+      sessions.set(recoveredSession.id, recoveredSession);
+      return recoveredSession;
+    } catch {
+      request.__clearAuthCookies = true;
+      return null;
     }
   }
-}
 
-setInterval(() => {
-  cleanupSessions();
-  cleanupLoginAttempts();
-}, 1000 * 60 * 15).unref();
+  function cleanupSessions() {
+    const timestamp = now();
+    for (const [id, session] of sessions) {
+      if (session.expiresAt <= timestamp) sessions.delete(id);
+    }
+  }
 
-async function getSession(request) {
-  const cookies = parseCookies(request.headers.cookie);
-  const sessionId = cookies[SESSION_COOKIE];
-  if (sessionId) {
-    const session = sessions.get(sessionId);
-    if (session) {
-      if (session.expiresAt <= Date.now()) {
-        sessions.delete(sessionId);
+  function cleanupLoginAttempts() {
+    const timestamp = now();
+    for (const [ipAddress, timestamps] of loginAttempts) {
+      const activeTimestamps = pruneLoginAttemptBucket(timestamps, timestamp);
+      if (activeTimestamps.length === 0) {
+        loginAttempts.delete(ipAddress);
       } else {
-        session.expiresAt = Date.now() + SESSION_TTL_MS;
-        return session;
+        loginAttempts.set(ipAddress, activeTimestamps);
       }
     }
   }
 
-  return recoverSessionFromRefreshCookie(request);
-}
+  const cleanupTimer = setIntervalFn(() => {
+    cleanupSessions();
+    cleanupLoginAttempts();
+  }, 1000 * 60 * 15);
+  cleanupTimer?.unref?.();
 
-async function serveStatic(request, response) {
-  const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
-  const readStaticFile = async relativePath => {
-    for (const staticDir of staticDirs) {
-      const safePath =
-        relativePath === "/"
-          ? path.join(staticDir, "index.html")
-          : path.resolve(staticDir, `.${relativePath}`);
-
-      if (!safePath.startsWith(staticDir)) {
-        continue;
-      }
-
-      try {
-        const file = await readFile(safePath);
-        return {
-          file,
-          safePath,
-        };
-      } catch {
-        // try the next static root
+  async function getSession(request) {
+    const cookies = parseCookies(request.headers.cookie);
+    const sessionId = cookies[SESSION_COOKIE];
+    if (sessionId) {
+      const session = sessions.get(sessionId);
+      if (session) {
+        if (session.expiresAt <= now()) {
+          sessions.delete(sessionId);
+        } else {
+          session.expiresAt = now() + SESSION_TTL_MS;
+          return session;
+        }
       }
     }
 
-    if (relativePath.startsWith("/src/")) {
-      const safePath = path.resolve(__dirname, `.${relativePath}`);
+    return recoverSessionFromRefreshCookie(request);
+  }
 
-      if (safePath.startsWith(`${sourceDir}${path.sep}`)) {
+  async function serveStatic(request, response) {
+    const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
+    const readStaticFile = async relativePath => {
+      for (const staticDir of staticDirectories) {
+        const safePath =
+          relativePath === "/"
+            ? path.join(staticDir, "index.html")
+            : path.resolve(staticDir, `.${relativePath}`);
+
+        if (!safePath.startsWith(staticDir)) {
+          continue;
+        }
+
         try {
           const file = await readFile(safePath);
           return {
@@ -589,163 +600,212 @@ async function serveStatic(request, response) {
             safePath,
           };
         } catch {
-          // fall through to the 404 below
+          // try the next static root
         }
+      }
+
+      if (relativePath.startsWith("/src/")) {
+        const safePath = path.resolve(__dirname, `.${relativePath}`);
+
+        if (safePath.startsWith(`${sourceDirectory}${path.sep}`)) {
+          try {
+            const file = await readFile(safePath);
+            return {
+              file,
+              safePath,
+            };
+          } catch {
+            // fall through to the 404 below
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const asset = await readStaticFile(requestPath);
+
+    if (asset) {
+      const ext = path.extname(asset.safePath);
+      const cacheControl =
+        ext === ".html" || ext === ".js" || ext === ".css" ? "no-store" : "public, max-age=3600";
+
+      response.writeHead(200, {
+        "Cache-Control": cacheControl,
+        "Content-Type": contentTypes[ext] || "application/octet-stream",
+        ...securityHeaders,
+      });
+      response.end(asset.file);
+      return;
+    }
+
+    if (requestPath !== "/" && !path.extname(requestPath)) {
+      const spaEntry = await readStaticFile("/");
+      if (spaEntry) {
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Type": "text/html; charset=utf-8",
+          ...securityHeaders,
+        });
+        response.end(spaEntry.file);
+        return;
       }
     }
 
-    return null;
-  };
-
-  const asset = await readStaticFile(requestPath);
-
-  if (asset) {
-    const ext = path.extname(asset.safePath);
-    const cacheControl =
-      ext === ".html" || ext === ".js" || ext === ".css" ? "no-store" : "public, max-age=3600";
-
-    response.writeHead(200, {
-      "Cache-Control": cacheControl,
-      "Content-Type": contentTypes[ext] || "application/octet-stream",
-      ...securityHeaders,
+    writeJson(response, 404, {
+      error: "Not found.",
     });
-    response.end(asset.file);
-    return;
   }
 
-  if (requestPath !== "/" && !path.extname(requestPath)) {
-    const spaEntry = await readStaticFile("/");
-    if (spaEntry) {
-      response.writeHead(200, {
-        "Cache-Control": "no-store",
-        "Content-Type": "text/html; charset=utf-8",
-        ...securityHeaders,
-      });
-      response.end(spaEntry.file);
-      return;
-    }
-  }
+  const handler = async (request, response) => {
+    const method = request.method || "GET";
+    const url = new URL(request.url || "/", `http://${request.headers.host}`);
 
-  writeJson(response, 404, {
-    error: "Not found.",
-  });
-}
+    try {
+      if (url.pathname === "/api/session" && method === "GET") {
+        const session = await getSession(request);
+        if (!session) {
+          if (request.__clearAuthCookies) clearAuthCookies(request, response);
+          writeJson(response, 200, {
+            authenticated: false,
+          });
+          return;
+        }
 
-const server = createServer(async (request, response) => {
-  const method = request.method || "GET";
-  const url = new URL(request.url || "/", `http://${request.headers.host}`);
+        if (!session.user) await fetchUser(session);
+        setAuthCookies(request, response, session);
+        writeJson(response, 200, sessionSummary(session));
+        return;
+      }
 
-  try {
-    if (url.pathname === "/api/session" && method === "GET") {
-      const session = await getSession(request);
-      if (!session) {
-        if (request.__clearAuthCookies) clearAuthCookies(request, response);
+      if (url.pathname === "/api/login" && method === "POST") {
+        const body = await readJsonBody(request);
+        const email = String(body.email || "").trim();
+        const password = String(body.password || "");
+
+        if (!email || !password) {
+          writeJson(response, 400, {
+            error: "Email and password are required.",
+          });
+          return;
+        }
+
+        const ipAddress = assertLoginRateLimit(request);
+        let successfulLogin = false;
+        const tokens = await loginToGira(email, password)
+          .then(result => {
+            successfulLogin = true;
+            return result;
+          })
+          .finally(() => {
+            recordLoginAttempt(ipAddress, successfulLogin);
+          });
+        const session = createSession(tokens, {
+          email,
+          name: email,
+        });
+
+        await fetchUser(session).catch(() => null);
+        setAuthCookies(request, response, session);
+        writeJson(response, 200, sessionSummary(session));
+        return;
+      }
+
+      if (url.pathname === "/api/logout" && method === "POST") {
+        const cookies = parseCookies(request.headers.cookie);
+        clearSession(cookies[SESSION_COOKIE]);
+        clearAuthCookies(request, response);
         writeJson(response, 200, {
           authenticated: false,
         });
         return;
       }
 
-      if (!session.user) await fetchUser(session);
-      setAuthCookies(request, response, session);
-      writeJson(response, 200, sessionSummary(session));
-      return;
-    }
+      if (url.pathname === "/api/stations" && method === "GET") {
+        const session = await getSession(request);
+        if (!session) {
+          if (request.__clearAuthCookies) clearAuthCookies(request, response);
+          writeJson(response, 401, {
+            error: "You need to log in with your Gira account first.",
+          });
+          return;
+        }
 
-    if (url.pathname === "/api/login" && method === "POST") {
-      const body = await readJsonBody(request);
-      const email = String(body.email || "").trim();
-      const password = String(body.password || "");
+        const stations = await fetchStations(session);
+        if (!session.user) await fetchUser(session).catch(() => null);
+        session.expiresAt = now() + SESSION_TTL_MS;
+        setAuthCookies(request, response, session);
 
-      if (!email || !password) {
-        writeJson(response, 400, {
-          error: "Email and password are required.",
+        writeJson(response, 200, {
+          fetchedAt: new Date().toISOString(),
+          source: "live",
+          stationCount: stations.length,
+          stations,
+          user: session.user || null,
         });
         return;
       }
 
-      const ipAddress = assertLoginRateLimit(request);
-      let successfulLogin = false;
-      const tokens = await loginToGira(email, password)
-        .then(result => {
-          successfulLogin = true;
-          return result;
-        })
-        .finally(() => {
-          recordLoginAttempt(ipAddress, successfulLogin);
-        });
-      const session = createSession(tokens, {
-        email,
-        name: email,
-      });
-
-      await fetchUser(session).catch(() => null);
-      setAuthCookies(request, response, session);
-      writeJson(response, 200, sessionSummary(session));
-      return;
-    }
-
-    if (url.pathname === "/api/logout" && method === "POST") {
-      const cookies = parseCookies(request.headers.cookie);
-      clearSession(cookies[SESSION_COOKIE]);
-      clearAuthCookies(request, response);
-      writeJson(response, 200, {
-        authenticated: false,
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/stations" && method === "GET") {
-      const session = await getSession(request);
-      if (!session) {
-        if (request.__clearAuthCookies) clearAuthCookies(request, response);
-        writeJson(response, 401, {
-          error: "You need to log in with your Gira account first.",
+      if (url.pathname === "/api/health" && method === "GET") {
+        writeJson(response, 200, {
+          ok: true,
         });
         return;
       }
 
-      const stations = await fetchStations(session);
-      if (!session.user) await fetchUser(session).catch(() => null);
-      setAuthCookies(request, response, session);
-
-      writeJson(response, 200, {
-        fetchedAt: new Date().toISOString(),
-        source: "live",
-        stationCount: stations.length,
-        stations,
-        user: session.user || null,
+      await serveStatic(request, response);
+    } catch (error) {
+      const statusCode =
+        Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode <= 599
+          ? error.statusCode
+          : Number.isInteger(error?.code) && error.code >= 400 && error.code <= 599
+            ? error.code
+            : 500;
+      const message =
+        redactSensitiveText(error?.message, [
+          error?.accessToken,
+          error?.refreshToken,
+        ]) || "Unexpected server error.";
+      writeJson(response, statusCode, {
+        error: message,
       });
-      return;
     }
+  };
 
-    if (url.pathname === "/api/health" && method === "GET") {
-      writeJson(response, 200, {
-        ok: true,
+  const server = createServer(handler);
+
+  return {
+    close() {
+      clearIntervalFn(cleanupTimer);
+      return new Promise((resolve, reject) => {
+        server.close(error => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
       });
-      return;
-    }
+    },
+    handler,
+    host,
+    port,
+    server,
+    state: {
+      loginAttempts,
+      sessions,
+    },
+  };
+}
 
-    await serveStatic(request, response);
-  } catch (error) {
-    const statusCode =
-      Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode <= 599
-        ? error.statusCode
-        : Number.isInteger(error?.code) && error.code >= 400 && error.code <= 599
-          ? error.code
-          : 500;
-    const message =
-      redactSensitiveText(error?.message, [
-        error?.accessToken,
-        error?.refreshToken,
-      ]) || "Unexpected server error.";
-    writeJson(response, statusCode, {
-      error: message,
-    });
-  }
-});
+function isDirectRun() {
+  return Boolean(process.argv[1] && path.resolve(process.argv[1]) === __filename);
+}
 
-server.listen(PORT, HOST, () => {
-  const displayHost = HOST === "0.0.0.0" ? "localhost" : HOST;
-  console.log(`Gira Grand Prix is running at http://${displayHost}:${PORT}`);
-});
+if (isDirectRun()) {
+  const app = createAppServer();
+  app.server.listen(app.port, app.host, () => {
+    const displayHost = app.host === "0.0.0.0" ? "localhost" : app.host;
+    console.log(`Gira Grand Prix is running at http://${displayHost}:${app.port}`);
+  });
+}
