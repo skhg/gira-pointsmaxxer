@@ -12,11 +12,8 @@ import {
   DEFAULT_OCCUPIED_THRESHOLD,
   classifyStation,
   computeOptimalPlan,
-  estimateWalkLeg,
-  findNearestAvailableBikeStation,
   findNearestStation,
   finishBonusRatioAfterDock,
-  haversineKm,
   occupiedRatioNow,
 } from "./lib/planner.js";
 import { demoStations } from "../testing/fixtures/demo-stations.js";
@@ -790,14 +787,6 @@ function mercatorYFromLatitude(latitude) {
   const clampedLatitude = clampLatitude(latitude);
   const radians = (clampedLatitude * Math.PI) / 180;
   return (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2;
-}
-
-function worldPointFromLatLng(latitude, longitude, zoom) {
-  const scale = MAP_TILE_SIZE * 2 ** zoom;
-  return {
-    x: mercatorXFromLongitude(longitude) * scale,
-    y: mercatorYFromLatitude(latitude) * scale,
-  };
 }
 
 function chooseMapTileZoom(mercatorSpanX, mercatorSpanY, viewportWidth, viewportHeight) {

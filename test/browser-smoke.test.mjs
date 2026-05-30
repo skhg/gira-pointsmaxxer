@@ -6,10 +6,22 @@ import { chromium } from "playwright-core";
 
 import { startTestServer } from "./helpers/app-server.mjs";
 
-const CHROME_EXECUTABLE = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CHROME_EXECUTABLE_CANDIDATES = [
+  process.env.CHROME_EXECUTABLE_PATH,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+].filter(Boolean);
+
+function findChromeExecutable() {
+  return CHROME_EXECUTABLE_CANDIDATES.find(candidate => fs.existsSync(candidate)) || null;
+}
 
 test("browser smoke: demo snapshot can produce a route in the built app", async t => {
-  if (!fs.existsSync(CHROME_EXECUTABLE)) {
+  const chromeExecutable = findChromeExecutable();
+  if (!chromeExecutable) {
     t.skip("Google Chrome is not installed on this machine.");
     return;
   }
@@ -19,7 +31,7 @@ test("browser smoke: demo snapshot can produce a route in the built app", async 
 
   try {
     browser = await chromium.launch({
-      executablePath: CHROME_EXECUTABLE,
+      executablePath: chromeExecutable,
       headless: true,
     });
     const page = await browser.newPage();
@@ -33,7 +45,7 @@ test("browser smoke: demo snapshot can produce a route in the built app", async 
 
     await page.getByRole("button", { name: "Use demo snapshot" }).click();
     await page.evaluate(() => {
-      const finishInput = document.getElementById("finishTimeInput");
+      const finishInput = globalThis.document.getElementById("finishTimeInput");
       const next = new Date(Date.now() + 2 * 60 * 60 * 1000);
       next.setSeconds(0, 0);
       const remainder = next.getMinutes() % 5;
@@ -50,7 +62,7 @@ test("browser smoke: demo snapshot can produce a route in the built app", async 
     await page.getByRole("button", { name: "Find best strategy" }).click();
 
     await page.waitForFunction(() => {
-      const pointsValue = document.getElementById("pointsValue");
+      const pointsValue = globalThis.document.getElementById("pointsValue");
       return Boolean(pointsValue && pointsValue.textContent && pointsValue.textContent !== "0");
     });
 

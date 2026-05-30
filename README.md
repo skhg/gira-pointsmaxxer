@@ -46,7 +46,9 @@ The bundled demo stations now live in [testing/fixtures/demo-stations.js](/Users
 Run the automated checks with:
 
 ```bash
+npm run lint
 npm test
+npm run audit:high
 ```
 
 Or run them individually:
@@ -64,6 +66,16 @@ Current automated coverage focuses on:
 - a built-app browser smoke flow that loads the demo snapshot and produces a route end to end
 
 The browser smoke test uses local Google Chrome via `playwright-core`, and the server tests call the app handler directly so they do not need live Gira credentials or network access.
+
+## Dependency hardening
+
+The repo now includes a few basic npm supply-chain guardrails:
+
+- exact dependency pinning in [package.json](/Users/een2cok/workspace/gira%20grand%20prix/package.json)
+- `save-exact=true` in [/.npmrc](/Users/een2cok/workspace/gira%20grand%20prix/.npmrc)
+- CI installs with `npm ci --ignore-scripts` and pins GitHub Actions by commit SHA in [ci.yml](/Users/een2cok/workspace/gira%20grand%20prix/.github/workflows/ci.yml)
+- weekly dependency update PRs via [dependabot.yml](/Users/een2cok/workspace/gira%20grand%20prix/.github/dependabot.yml)
+- `npm audit --audit-level=high` as both a local script and a CI check
 
 ## Put it online fast
 

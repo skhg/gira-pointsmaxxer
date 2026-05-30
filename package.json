@@ -2,10 +2,13 @@
   "name": "gira-grand-prix",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.2",
   "type": "module",
   "scripts": {
+    "audit:high": "npm audit --audit-level=high",
     "dev": "vite dev",
     "build": "vite build",
+    "lint": "eslint .",
     "preview": "vite preview",
     "test": "npm run build && node --test test/*.test.mjs",
     "test:browser": "npm run build && node --test test/browser-smoke.test.mjs",
@@ -15,7 +18,10 @@
     "start": "npm run build && node server.mjs"
   },
   "devDependencies": {
-    "playwright-core": "^1.55.0",
-    "vite": "^7.2.7"
+    "@eslint/js": "9.39.4",
+    "eslint": "9.39.4",
+    "globals": "17.6.0",
+    "playwright-core": "1.60.0",
+    "vite": "7.3.3"
   }
 }
