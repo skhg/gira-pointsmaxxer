@@ -11,6 +11,7 @@ const sourceDir = path.join(__dirname, "src");
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
 const SESSION_COOKIE = "gira_planner_session";
+const REFRESH_COOKIE = "gira_planner_refresh";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
 const LOGIN_WINDOW_MS = 1000 * 60 * 10;
 const LOGIN_MAX_ATTEMPTS = 8;
@@ -151,23 +152,6 @@ async function readJsonBody(request) {
   }
 }
 
-function getSession(request) {
-  const cookies = parseCookies(request.headers.cookie);
-  const sessionId = cookies[SESSION_COOKIE];
-  if (!sessionId) return null;
-
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-
-  if (session.expiresAt <= Date.now()) {
-    sessions.delete(sessionId);
-    return null;
-  }
-
-  session.expiresAt = Date.now() + SESSION_TTL_MS;
-  return session;
-}
-
 function createSession(tokens, user) {
   const id = randomUUID();
   const session = {
@@ -245,22 +229,28 @@ function recordLoginAttempt(ipAddress, successful) {
   loginAttempts.set(ipAddress, attempts);
 }
 
-function setSessionCookie(request, response, sessionId) {
+function buildCookieAttributes(request, maxAgeSeconds) {
   const secureAttribute = isSecureRequest(request) ? "; Secure" : "";
+  return `HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=${maxAgeSeconds}`;
+}
+
+function setAuthCookies(request, response, session) {
+  const cookieAttributes = buildCookieAttributes(request, SESSION_TTL_MS / 1000);
   response.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=${
-      SESSION_TTL_MS / 1000
-    }`
+    [
+      `${SESSION_COOKIE}=${encodeURIComponent(session.id)}; ${cookieAttributes}`,
+      `${REFRESH_COOKIE}=${encodeURIComponent(session.refreshToken)}; ${cookieAttributes}`,
+    ]
   );
 }
 
-function clearSessionCookie(request, response) {
-  const secureAttribute = isSecureRequest(request) ? "; Secure" : "";
-  response.setHeader(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=0`
-  );
+function clearAuthCookies(request, response) {
+  const cookieAttributes = buildCookieAttributes(request, 0);
+  response.setHeader("Set-Cookie", [
+    `${SESSION_COOKIE}=; ${cookieAttributes}`,
+    `${REFRESH_COOKIE}=; ${cookieAttributes}`,
+  ]);
 }
 
 async function upstreamJson(url, options) {
@@ -496,6 +486,32 @@ function sessionSummary(session) {
   };
 }
 
+async function recoverSessionFromRefreshCookie(request) {
+  const cookies = parseCookies(request.headers.cookie);
+  const refreshToken = String(cookies[REFRESH_COOKIE] || "").trim();
+  if (!refreshToken) return null;
+
+  const recoveredSession = {
+    id: randomUUID(),
+    accessToken: "",
+    refreshToken,
+    expiration: 0,
+    user: null,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + SESSION_TTL_MS,
+    needsCookieSync: true,
+  };
+
+  try {
+    await refreshSession(recoveredSession);
+    sessions.set(recoveredSession.id, recoveredSession);
+    return recoveredSession;
+  } catch {
+    request.__clearAuthCookies = true;
+    return null;
+  }
+}
+
 function cleanupSessions() {
   const now = Date.now();
   for (const [id, session] of sessions) {
@@ -519,6 +535,24 @@ setInterval(() => {
   cleanupSessions();
   cleanupLoginAttempts();
 }, 1000 * 60 * 15).unref();
+
+async function getSession(request) {
+  const cookies = parseCookies(request.headers.cookie);
+  const sessionId = cookies[SESSION_COOKIE];
+  if (sessionId) {
+    const session = sessions.get(sessionId);
+    if (session) {
+      if (session.expiresAt <= Date.now()) {
+        sessions.delete(sessionId);
+      } else {
+        session.expiresAt = Date.now() + SESSION_TTL_MS;
+        return session;
+      }
+    }
+  }
+
+  return recoverSessionFromRefreshCookie(request);
+}
 
 async function serveStatic(request, response) {
   const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
@@ -603,8 +637,9 @@ const server = createServer(async (request, response) => {
 
   try {
     if (url.pathname === "/api/session" && method === "GET") {
-      const session = getSession(request);
+      const session = await getSession(request);
       if (!session) {
+        if (request.__clearAuthCookies) clearAuthCookies(request, response);
         writeJson(response, 200, {
           authenticated: false,
         });
@@ -612,6 +647,7 @@ const server = createServer(async (request, response) => {
       }
 
       if (!session.user) await fetchUser(session);
+      setAuthCookies(request, response, session);
       writeJson(response, 200, sessionSummary(session));
       return;
     }
@@ -644,7 +680,7 @@ const server = createServer(async (request, response) => {
       });
 
       await fetchUser(session).catch(() => null);
-      setSessionCookie(request, response, session.id);
+      setAuthCookies(request, response, session);
       writeJson(response, 200, sessionSummary(session));
       return;
     }
@@ -652,7 +688,7 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/logout" && method === "POST") {
       const cookies = parseCookies(request.headers.cookie);
       clearSession(cookies[SESSION_COOKIE]);
-      clearSessionCookie(request, response);
+      clearAuthCookies(request, response);
       writeJson(response, 200, {
         authenticated: false,
       });
@@ -660,8 +696,9 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.pathname === "/api/stations" && method === "GET") {
-      const session = getSession(request);
+      const session = await getSession(request);
       if (!session) {
+        if (request.__clearAuthCookies) clearAuthCookies(request, response);
         writeJson(response, 401, {
           error: "You need to log in with your Gira account first.",
         });
@@ -670,6 +707,7 @@ const server = createServer(async (request, response) => {
 
       const stations = await fetchStations(session);
       if (!session.user) await fetchUser(session).catch(() => null);
+      setAuthCookies(request, response, session);
 
       writeJson(response, 200, {
         fetchedAt: new Date().toISOString(),
