@@ -9,6 +9,12 @@ import {
 } from "./gira-client.js";
 
 const RESOLUTION_SECONDS = 30;
+const MAP_TILE_SIZE = 256;
+const MAP_TILE_MAX_COUNT = 36;
+const MAP_TILE_MAX_ZOOM = 17;
+const MAP_TILE_MIN_ZOOM = 11;
+const MAP_TILE_URL_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const MERCATOR_MAX_LATITUDE = 85.05112878;
 const DEFAULT_CHALLENGE_MINUTES = 120;
 const DEFAULT_OCCUPIED_THRESHOLD = 0.7;
 const DEFAULT_EMPTY_THRESHOLD = 0.7;
@@ -1075,6 +1081,119 @@ function buildBounds(stations) {
   );
 }
 
+function clampLatitude(latitude) {
+  return Math.max(-MERCATOR_MAX_LATITUDE, Math.min(MERCATOR_MAX_LATITUDE, latitude));
+}
+
+function mercatorXFromLongitude(longitude) {
+  return (longitude + 180) / 360;
+}
+
+function mercatorYFromLatitude(latitude) {
+  const clampedLatitude = clampLatitude(latitude);
+  const radians = (clampedLatitude * Math.PI) / 180;
+  return (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2;
+}
+
+function worldPointFromLatLng(latitude, longitude, zoom) {
+  const scale = MAP_TILE_SIZE * 2 ** zoom;
+  return {
+    x: mercatorXFromLongitude(longitude) * scale,
+    y: mercatorYFromLatitude(latitude) * scale,
+  };
+}
+
+function chooseMapTileZoom(mercatorSpanX, mercatorSpanY, viewportWidth, viewportHeight) {
+  const normalizedLngSpan = Math.max(mercatorSpanX, 1e-6);
+  const normalizedLatSpan = Math.max(mercatorSpanY, 1e-6);
+  const zoomForWidth = Math.log2(viewportWidth / (MAP_TILE_SIZE * normalizedLngSpan));
+  const zoomForHeight = Math.log2(viewportHeight / (MAP_TILE_SIZE * normalizedLatSpan));
+  const idealZoom = Math.min(zoomForWidth, zoomForHeight);
+
+  if (!Number.isFinite(idealZoom)) return MAP_TILE_MIN_ZOOM;
+  return Math.max(MAP_TILE_MIN_ZOOM, Math.min(MAP_TILE_MAX_ZOOM, Math.ceil(idealZoom)));
+}
+
+function buildMapTileUrl(zoom, x, y) {
+  return MAP_TILE_URL_TEMPLATE
+    .replace("{z}", String(zoom))
+    .replace("{x}", String(x))
+    .replace("{y}", String(y));
+}
+
+function buildProjectionViewport(bounds, width, height, padding) {
+  const usableWidth = width - padding * 2;
+  const usableHeight = height - padding * 2;
+  const minMercatorX = mercatorXFromLongitude(bounds.minLng);
+  const maxMercatorX = mercatorXFromLongitude(bounds.maxLng);
+  const minMercatorY = mercatorYFromLatitude(bounds.maxLat);
+  const maxMercatorY = mercatorYFromLatitude(bounds.minLat);
+  const mercatorSpanX = Math.max(maxMercatorX - minMercatorX, 1e-6);
+  const mercatorSpanY = Math.max(maxMercatorY - minMercatorY, 1e-6);
+  const scale = Math.min(usableWidth / mercatorSpanX, usableHeight / mercatorSpanY);
+  const contentWidth = mercatorSpanX * scale;
+  const contentHeight = mercatorSpanY * scale;
+  const originX = padding + (usableWidth - contentWidth) / 2;
+  const originY = padding + (usableHeight - contentHeight) / 2;
+
+  return {
+    contentHeight,
+    contentWidth,
+    maxMercatorX,
+    maxMercatorY,
+    mercatorSpanX,
+    mercatorSpanY,
+    minMercatorX,
+    minMercatorY,
+    originX,
+    originY,
+    scale,
+  };
+}
+
+function buildMapTileDescriptors(viewport) {
+  let zoom = chooseMapTileZoom(
+    viewport.mercatorSpanX,
+    viewport.mercatorSpanY,
+    viewport.contentWidth,
+    viewport.contentHeight
+  );
+  let descriptors = [];
+
+  while (zoom >= MAP_TILE_MIN_ZOOM) {
+    const tileScale = 2 ** zoom;
+    const tileMinX = Math.floor(viewport.minMercatorX * tileScale);
+    const tileMaxX = Math.ceil(viewport.maxMercatorX * tileScale) - 1;
+    const tileMinY = Math.floor(viewport.minMercatorY * tileScale);
+    const tileMaxY = Math.ceil(viewport.maxMercatorY * tileScale) - 1;
+    const tileColumns = tileMaxX - tileMinX + 1;
+    const tileRows = tileMaxY - tileMinY + 1;
+
+    if (tileColumns * tileRows <= MAP_TILE_MAX_COUNT || zoom === MAP_TILE_MIN_ZOOM) {
+      descriptors = [];
+      for (let tileX = tileMinX; tileX <= tileMaxX; tileX += 1) {
+        for (let tileY = tileMinY; tileY <= tileMaxY; tileY += 1) {
+          if (tileY < 0 || tileY >= tileScale || tileX < 0 || tileX >= tileScale) continue;
+
+          descriptors.push({
+            href: buildMapTileUrl(zoom, tileX, tileY),
+            height: viewport.scale / tileScale,
+            width: viewport.scale / tileScale,
+            x: viewport.originX + (tileX / tileScale - viewport.minMercatorX) * viewport.scale,
+            y: viewport.originY + (tileY / tileScale - viewport.minMercatorY) * viewport.scale,
+          });
+        }
+      }
+
+      break;
+    }
+
+    zoom -= 1;
+  }
+
+  return descriptors;
+}
+
 function expandBounds(bounds, options = {}) {
   const {
     minLatSpan = 0.01,
@@ -1150,10 +1269,7 @@ function projectStations(stations, focusStations = stations) {
   const width = 1000;
   const height = 700;
   const padding = 70;
-  const latSpan = Math.max(bounds.maxLat - bounds.minLat, 0.001);
-  const lngSpan = Math.max(bounds.maxLng - bounds.minLng, 0.001);
-  const usableWidth = width - padding * 2;
-  const usableHeight = height - padding * 2;
+  const viewport = buildProjectionViewport(bounds, width, height, padding);
 
   const projected = new Map();
   const projectionSources = [...stations];
@@ -1164,8 +1280,12 @@ function projectStations(stations, focusStations = stations) {
   }
 
   for (const station of projectionSources) {
-    const x = padding + ((station.longitude - bounds.minLng) / lngSpan) * usableWidth;
-    const y = height - padding - ((station.latitude - bounds.minLat) / latSpan) * usableHeight;
+    const x =
+      viewport.originX +
+      (mercatorXFromLongitude(station.longitude) - viewport.minMercatorX) * viewport.scale;
+    const y =
+      viewport.originY +
+      (mercatorYFromLatitude(station.latitude) - viewport.minMercatorY) * viewport.scale;
     projected.set(station.code, { x, y });
   }
 
@@ -1174,6 +1294,7 @@ function projectStations(stations, focusStations = stations) {
   return {
     bounds,
     projected,
+    viewport,
     visibleStations,
   };
 }
@@ -1205,7 +1326,7 @@ function drawNetwork() {
   const svg = elements.networkSvg;
   const stations = state.stations;
   const focusStations = getFocusStations();
-  const { projected, visibleStations } = projectStations(stations, focusStations);
+  const { bounds, projected, viewport, visibleStations } = projectStations(stations, focusStations);
   const viewBox = svg.viewBox.baseVal;
   const viewBoxWidth = viewBox?.width || 1000;
   const viewBoxHeight = viewBox?.height || 700;
@@ -1217,21 +1338,57 @@ function drawNetwork() {
     hideNetworkTooltip();
   };
 
-  const background = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  for (let index = 0; index < 7; index += 1) {
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const y = 80 + index * 85;
-    line.setAttribute(
-      "d",
-      `M 20 ${y} C 220 ${y - 20}, 420 ${y + 18}, 980 ${y - 12}`
-    );
-    line.setAttribute("stroke", "rgba(23, 35, 20, 0.06)");
-    line.setAttribute("stroke-width", "1.2");
-    line.setAttribute("fill", "none");
-    line.setAttribute("stroke-dasharray", "5 10");
-    background.appendChild(line);
+  if (bounds) {
+    const clipId = `network-map-clip-${state.plan ? "focused" : "all"}`;
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+    clipPath.setAttribute("id", clipId);
+
+    const clipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    clipRect.setAttribute("x", String(viewport.originX));
+    clipRect.setAttribute("y", String(viewport.originY));
+    clipRect.setAttribute("width", String(viewport.contentWidth));
+    clipRect.setAttribute("height", String(viewport.contentHeight));
+    clipPath.appendChild(clipRect);
+    defs.appendChild(clipPath);
+    svg.appendChild(defs);
+
+    const mapGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    mapGroup.setAttribute("clip-path", `url(#${clipId})`);
+
+    for (const tile of buildMapTileDescriptors(viewport)) {
+      const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+      image.setAttribute("x", String(tile.x));
+      image.setAttribute("y", String(tile.y));
+      image.setAttribute("width", String(tile.width));
+      image.setAttribute("height", String(tile.height));
+      image.setAttribute("preserveAspectRatio", "none");
+      image.setAttribute("opacity", "0.9");
+      image.setAttribute("href", tile.href);
+      mapGroup.appendChild(image);
+    }
+
+    const wash = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    wash.setAttribute("x", String(viewport.originX));
+    wash.setAttribute("y", String(viewport.originY));
+    wash.setAttribute("width", String(viewport.contentWidth));
+    wash.setAttribute("height", String(viewport.contentHeight));
+    wash.setAttribute("fill", "rgba(255, 251, 244, 0.2)");
+    mapGroup.appendChild(wash);
+
+    svg.appendChild(mapGroup);
+
+    const frame = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    frame.setAttribute("x", String(viewport.originX));
+    frame.setAttribute("y", String(viewport.originY));
+    frame.setAttribute("width", String(viewport.contentWidth));
+    frame.setAttribute("height", String(viewport.contentHeight));
+    frame.setAttribute("rx", "22");
+    frame.setAttribute("fill", "none");
+    frame.setAttribute("stroke", "rgba(255,255,255,0.45)");
+    frame.setAttribute("stroke-width", "2");
+    svg.appendChild(frame);
   }
-  svg.appendChild(background);
 
   const projectionLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
   projectionLabel.setAttribute("x", "32");

@@ -508,6 +508,27 @@ select:disabled {
   margin-bottom: 4px;
 }
 
+.network-attribution {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.9);
+  color: rgba(23, 35, 20, 0.76);
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Cascadia Mono", monospace;
+  font-size: 0.7rem;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(23, 35, 20, 0.08);
+}
+
+.network-attribution:hover,
+.network-attribution:focus-visible {
+  color: var(--route);
+}
+
 #networkSvg g[role="button"] {
   cursor: pointer;
 }
