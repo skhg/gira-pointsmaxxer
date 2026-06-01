@@ -185,3 +185,22 @@ test("login endpoint rate limits repeated failures from the same client", async 
     await server.close().catch(() => null);
   }
 });
+
+test("legacy Render hostname permanently redirects to the new Pointsmaxxer URL", async () => {
+  const server = createAppServer(createAuthStubs());
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      host: "gira-grand-prix.onrender.com",
+      url: "/credits?view=full",
+    });
+
+    assert.equal(response.status, 308);
+    assert.equal(
+      response.headers.get("location"),
+      "https://gira-pointsmaxxer.onrender.com/credits?view=full"
+    );
+  } finally {
+    await server.close().catch(() => null);
+  }
+});

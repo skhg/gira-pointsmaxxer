@@ -17,6 +17,9 @@ const REFRESH_COOKIE = "gira_planner_refresh";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
 const LOGIN_WINDOW_MS = 1000 * 60 * 10;
 const LOGIN_MAX_ATTEMPTS = 8;
+const LEGACY_HOST_REDIRECTS = new Map([
+  ["gira-grand-prix.onrender.com", "https://gira-pointsmaxxer.onrender.com"],
+]);
 
 const GIRA_AUTH_URL = "https://c2g091p01.emel.pt/auth";
 const GIRA_GRAPHQL_URL = "https://c2g091p01.emel.pt/ws/graphql";
@@ -130,6 +133,29 @@ function writeJson(response, statusCode, payload, headers = {}) {
     ...headers,
   });
   response.end(JSON.stringify(payload));
+}
+
+function requestHostname(request) {
+  const forwardedHost = request.headers["x-forwarded-host"];
+  const rawHost =
+    typeof forwardedHost === "string" && forwardedHost.trim()
+      ? forwardedHost.split(",")[0].trim()
+      : String(request.headers.host || "").trim();
+
+  return rawHost.replace(/:\d+$/u, "").toLowerCase();
+}
+
+function maybeRedirectLegacyHost(request, response, url) {
+  const redirectOrigin = LEGACY_HOST_REDIRECTS.get(requestHostname(request));
+  if (!redirectOrigin) return false;
+
+  response.writeHead(308, {
+    "Cache-Control": "public, max-age=3600",
+    Location: `${redirectOrigin}${url.pathname}${url.search}`,
+    ...securityHeaders,
+  });
+  response.end();
+  return true;
 }
 
 async function readJsonBody(request) {
@@ -662,6 +688,10 @@ export function createAppServer(options = {}) {
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
 
     try {
+      if (maybeRedirectLegacyHost(request, response, url)) {
+        return;
+      }
+
       if (url.pathname === "/api/session" && method === "GET") {
         const session = await getSession(request);
         if (!session) {
