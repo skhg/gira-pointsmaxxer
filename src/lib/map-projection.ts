@@ -14,7 +14,7 @@ export interface GeoBounds {
   minLng: number;
 }
 
-interface ProjectionViewport {
+export interface ProjectionViewport {
   contentHeight: number;
   contentWidth: number;
   maxMercatorX: number;
@@ -28,6 +28,14 @@ interface ProjectionViewport {
   scale: number;
 }
 
+export interface MapTileDescriptor {
+  height: number;
+  href: string;
+  width: number;
+  x: number;
+  y: number;
+}
+
 interface ExpandBoundsOptions {
   minLatSpan?: number;
   minLngSpan?: number;
@@ -38,6 +46,13 @@ interface ProjectStationsOptions {
   height?: number;
   padding?: number;
   width?: number;
+}
+
+export interface ProjectStationsResult<TStation extends StationLike> {
+  bounds: GeoBounds | null;
+  projected: Map<string | number, { x: number; y: number }>;
+  viewport: ProjectionViewport | null;
+  visibleStations: TStation[];
 }
 
 export function buildBounds(stations: Array<Pick<StationLike, "latitude" | "longitude">>): GeoBounds | null {
@@ -126,14 +141,14 @@ export function buildProjectionViewport(bounds: GeoBounds, width: number, height
   };
 }
 
-export function buildMapTileDescriptors(viewport: ProjectionViewport) {
+export function buildMapTileDescriptors(viewport: ProjectionViewport): MapTileDescriptor[] {
   let zoom = chooseMapTileZoom(
     viewport.mercatorSpanX,
     viewport.mercatorSpanY,
     viewport.contentWidth,
     viewport.contentHeight
   );
-  let descriptors = [];
+  let descriptors: MapTileDescriptor[] = [];
 
   while (zoom >= MAP_TILE_MIN_ZOOM) {
     const tileScale = 2 ** zoom;
@@ -209,7 +224,7 @@ export function projectStations<TStation extends StationLike>(
   stations: TStation[],
   focusStations: Array<StationLike | null | undefined> = stations,
   options: ProjectStationsOptions = {}
-) {
+): ProjectStationsResult<TStation> {
   const {
     height = 700,
     padding = 70,
@@ -218,13 +233,25 @@ export function projectStations<TStation extends StationLike>(
 
   if (stations.length === 0) {
     return {
-      bounds: null,
-      projected: new Map(),
-      visibleStations: [],
+      bounds: null as GeoBounds | null,
+      projected: new Map<string | number, { x: number; y: number }>(),
+      viewport: null,
+      visibleStations: [] as TStation[],
     };
   }
 
-  const rawBounds = buildBounds(focusStations) || buildBounds(stations);
+  const sanitizedFocusStations = focusStations.filter(
+    (station): station is StationLike => Boolean(station)
+  );
+  const rawBounds = buildBounds(sanitizedFocusStations) || buildBounds(stations);
+  if (!rawBounds) {
+    return {
+      bounds: null as GeoBounds | null,
+      projected: new Map<string | number, { x: number; y: number }>(),
+      viewport: null,
+      visibleStations: [] as TStation[],
+    };
+  }
   const bounds = expandBounds(rawBounds);
   const viewport = buildProjectionViewport(bounds, width, height, padding);
 

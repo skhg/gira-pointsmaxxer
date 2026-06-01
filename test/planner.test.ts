@@ -123,9 +123,9 @@ test("planner inserts a walking transfer when the selected start station has no 
   assert.equal(plan.startStation.code, "A");
   assert.equal(plan.bikePickupStation.code, "B");
   assert.equal(plan.walkSteps.length, 1);
-  assert.equal(plan.steps[0].type, "walk");
+  assert.equal(plan.steps[0]!.type, "walk");
   assert.deepEqual(
-    [plan.steps[0].from.code, plan.steps[0].to.code],
+    [plan.steps[0]!.from.code, plan.steps[0]!.to.code],
     ["A", "B"]
   );
 });

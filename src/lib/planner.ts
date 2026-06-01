@@ -144,7 +144,7 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
     });
   }
 
-  const chosenStartStation = stations[startIndex];
+  const chosenStartStation = stations[startIndex]!;
   let rideStartIndex = startIndex;
   const preRideSteps: WalkStep[] = [];
 
@@ -172,7 +172,7 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
   const edges: PlannerEdge[][] = Array.from({ length: stations.length }, () => []);
 
   for (let fromIndex = 0; fromIndex < stations.length; fromIndex += 1) {
-    const from = stations[fromIndex];
+    const from = stations[fromIndex]!;
     if (from.assetStatus !== "active" || from.docks <= 0) continue;
 
     const originBikes = from.bikes + (fromIndex === rideStartIndex ? 0 : 1);
@@ -181,7 +181,7 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
     for (let toIndex = 0; toIndex < stations.length; toIndex += 1) {
       if (fromIndex === toIndex) continue;
 
-      const to = stations[toIndex];
+      const to = stations[toIndex]!;
       if (to.assetStatus !== "active" || to.docks <= 0) continue;
 
       const destinationPreArrivalBikes =
@@ -200,7 +200,7 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
           ? 100
           : 0;
 
-      edges[fromIndex].push({
+      edges[fromIndex]!.push({
         fromIndex,
         toIndex,
         distanceKm,
@@ -225,30 +225,30 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
 
   const initialExactMinutes = preRideSteps.reduce((sum, step) => sum + step.travelMinutes, 0);
 
-  bestScore[initialSlot][rideStartIndex] = 0;
-  bestExactMinutes[initialSlot][rideStartIndex] = initialExactMinutes;
+  bestScore[initialSlot]![rideStartIndex] = 0;
+  bestExactMinutes[initialSlot]![rideStartIndex] = initialExactMinutes;
 
   for (let timeSlot = 0; timeSlot <= maxSlots; timeSlot += 1) {
     for (let stationIndex = 0; stationIndex < stations.length; stationIndex += 1) {
-      const currentScore = bestScore[timeSlot][stationIndex];
+      const currentScore = bestScore[timeSlot]![stationIndex]!;
       if (!Number.isFinite(currentScore)) continue;
 
-      for (const edge of edges[stationIndex]) {
+      for (const edge of edges[stationIndex]!) {
         const nextSlot = timeSlot + edge.slots;
         if (nextSlot > maxSlots) continue;
 
         const nextScore = currentScore + edge.points;
-        const nextExactMinutes = bestExactMinutes[timeSlot][stationIndex] + edge.rideMinutes;
+        const nextExactMinutes = bestExactMinutes[timeSlot]![stationIndex]! + edge.rideMinutes;
 
         const shouldReplace =
-          nextScore > bestScore[nextSlot][edge.toIndex] ||
-          (nextScore === bestScore[nextSlot][edge.toIndex] &&
-            nextExactMinutes < bestExactMinutes[nextSlot][edge.toIndex]);
+          nextScore > bestScore[nextSlot]![edge.toIndex]! ||
+          (nextScore === bestScore[nextSlot]![edge.toIndex]! &&
+            nextExactMinutes < bestExactMinutes[nextSlot]![edge.toIndex]!);
 
         if (shouldReplace) {
-          bestScore[nextSlot][edge.toIndex] = nextScore;
-          bestExactMinutes[nextSlot][edge.toIndex] = nextExactMinutes;
-          previous[nextSlot][edge.toIndex] = {
+          bestScore[nextSlot]![edge.toIndex] = nextScore;
+          bestExactMinutes[nextSlot]![edge.toIndex] = nextExactMinutes;
+          previous[nextSlot]![edge.toIndex] = {
             edge,
             previousSlot: timeSlot,
             previousStationIndex: stationIndex,
@@ -259,12 +259,12 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
   }
 
   let finalSlot = 0;
-  let finalScore = bestScore[0][endIndex];
-  let finalExactMinutes = bestExactMinutes[0][endIndex];
+  let finalScore = bestScore[0]![endIndex]!;
+  let finalExactMinutes = bestExactMinutes[0]![endIndex]!;
 
   for (let timeSlot = 1; timeSlot <= maxSlots; timeSlot += 1) {
-    const score = bestScore[timeSlot][endIndex];
-    const exactMinutes = bestExactMinutes[timeSlot][endIndex];
+    const score = bestScore[timeSlot]![endIndex]!;
+    const exactMinutes = bestExactMinutes[timeSlot]![endIndex]!;
     if (
       score > finalScore ||
       (score === finalScore && exactMinutes < finalExactMinutes)
@@ -283,8 +283,9 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
   let cursorSlot = finalSlot;
   let cursorStation = endIndex;
 
-  while (previous[cursorSlot][cursorStation]) {
-    const step = previous[cursorSlot][cursorStation];
+  while (previous[cursorSlot]![cursorStation]) {
+    const step = previous[cursorSlot]![cursorStation];
+    if (!step) break;
     path.push(step.edge);
     cursorSlot = step.previousSlot;
     cursorStation = step.previousStationIndex;
@@ -299,12 +300,12 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
   const rideSteps: RideStep[] = path.map((edge, index) => ({
     distanceKm: edge.distanceKm,
     finishBonus: edge.finishBonus,
-    from: stations[edge.fromIndex],
+    from: stations[edge.fromIndex]!,
     points: edge.points,
     sequence: index + 1 + preRideSteps.length,
     startBonus: edge.startBonus,
-    title: `${stations[edge.fromIndex].label} → ${stations[edge.toIndex].label}`,
-    to: stations[edge.toIndex],
+    title: `${stations[edge.fromIndex]!.label} → ${stations[edge.toIndex]!.label}`,
+    to: stations[edge.toIndex]!,
     travelMinutes: edge.rideMinutes,
     type: "ride",
   }));
@@ -323,9 +324,9 @@ export function computeOptimalPlan(config: PlannerConfig): Plan | null {
     challengeFinishTime: finishDeadline,
     challengeRemainingMinutes: budgetMinutes,
     endIndex,
-    endStation: stations[endIndex],
+    endStation: stations[endIndex]!,
     finishAt: finalExactMinutes,
-    bikePickupStation: stations[rideStartIndex],
+    bikePickupStation: stations[rideStartIndex]!,
     plannedAt,
     points: finalScore,
     remainingBufferMinutes: Math.max(0, budgetMinutes - (totalRideMinutes + totalWalkMinutes)),

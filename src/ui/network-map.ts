@@ -6,8 +6,26 @@ import {
   occupiedRatioNow,
 } from "../lib/planner.js";
 import { buildMapTileDescriptors, projectStations } from "../lib/map-projection.js";
+import type { MessageValues, Plan, Station, StationLike } from "../types.js";
 
-function escapeHtml(value) {
+interface TooltipPosition {
+  x: number;
+  y: number;
+}
+
+interface ProjectedPoint {
+  x: number;
+  y: number;
+}
+
+interface NetworkMapControllerOptions {
+  plannerRoute: string;
+  svg: SVGSVGElement;
+  tooltip: HTMLElement;
+  translate: (key: string, values?: MessageValues) => string;
+}
+
+function escapeHtml(value: unknown) {
   return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -15,13 +33,13 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function getFocusStations(plan, stations) {
+function getFocusStations(plan: Plan | null, stations: Station[]) {
   if (!plan) return stations;
 
-  const seenCodes = new Set();
-  const focused = [];
+  const seenCodes = new Set<string | number>();
+  const focused: StationLike[] = [];
 
-  const addStation = station => {
+  const addStation = (station: StationLike | null | undefined) => {
     if (!station || seenCodes.has(station.code)) return;
     seenCodes.add(station.code);
     focused.push(station);
@@ -44,13 +62,22 @@ function getFocusStations(plan, stations) {
   return focused.length > 0 ? focused : stations;
 }
 
-export function createNetworkMapController({ plannerRoute, svg, tooltip, translate }) {
+function isProjectedPoint(point: ProjectedPoint | undefined): point is ProjectedPoint {
+  return Boolean(point);
+}
+
+export function createNetworkMapController({
+  plannerRoute,
+  svg,
+  tooltip,
+  translate,
+}: NetworkMapControllerOptions) {
   function hideTooltip() {
     tooltip.hidden = true;
     delete tooltip.dataset.stationCode;
   }
 
-  function positionTooltip(position) {
+  function positionTooltip(position: TooltipPosition) {
     const stageRect = svg.getBoundingClientRect();
     const tooltipWidth = tooltip.offsetWidth || 220;
     const tooltipHeight = tooltip.offsetHeight || 96;
@@ -69,20 +96,23 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
     tooltip.style.top = `${top}px`;
   }
 
-  function showTooltip(station, position) {
-    tooltip.dataset.stationCode = station.code;
+  function showTooltip(station: StationLike, position: TooltipPosition) {
+    const bikes = Number(station.bikes ?? 0);
+    const docks = Number(station.docks ?? 0);
+    const normalizedStation = { bikes, docks };
+    tooltip.dataset.stationCode = String(station.code);
     tooltip.innerHTML = `
-      <strong>${escapeHtml(station.label)}</strong>
+      <strong>${escapeHtml(station.label || station.name || station.code)}</strong>
       <div>${escapeHtml(
         translate("network.tooltipOccupied", {
-          bikes: station.bikes,
-          docks: station.docks,
+          bikes,
+          docks,
         })
       )}</div>
       <div>${escapeHtml(
         translate("network.tooltipStartBonus", {
           value:
-            occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD
+            occupiedRatioNow(normalizedStation) > DEFAULT_OCCUPIED_THRESHOLD
               ? translate("network.yes")
               : translate("network.no"),
         })
@@ -90,7 +120,7 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
       <div>${escapeHtml(
         translate("network.tooltipFinishBonus", {
           value:
-            finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD
+            finishBonusRatioAfterDock(normalizedStation) > DEFAULT_EMPTY_THRESHOLD
               ? translate("network.yes")
               : translate("network.no"),
         })
@@ -100,7 +130,17 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
     positionTooltip(position);
   }
 
-  function drawNetwork({ currentRoute, plannerHidden, plan, stations }) {
+  function drawNetwork({
+    currentRoute,
+    plannerHidden,
+    plan,
+    stations,
+  }: {
+    currentRoute: string;
+    plannerHidden: boolean;
+    plan: Plan | null;
+    stations: Station[];
+  }) {
     if (currentRoute !== plannerRoute || plannerHidden) {
       return;
     }
@@ -118,7 +158,7 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
       hideTooltip();
     };
 
-    if (bounds) {
+    if (bounds && viewport) {
       const clipId = `network-map-clip-${plan ? "focused" : "all"}`;
       const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
       const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
@@ -182,10 +222,11 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
     svg.appendChild(projectionLabel);
 
     if (plan?.route?.length) {
+      const firstRouteLeg = plan.route[0]!;
       const lineGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      const points = [plan.route[0].from, ...plan.route.map(leg => leg.to)]
+      const points = [firstRouteLeg.from, ...plan.route.map(leg => leg.to)]
         .map(station => projected.get(station.code))
-        .filter(Boolean)
+        .filter(isProjectedPoint)
         .map(point => `${point.x},${point.y}`)
         .join(" ");
 
@@ -214,7 +255,7 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
       for (const walkStep of plan.walkSteps) {
         const walkPoints = [walkStep.from, walkStep.to]
           .map(station => projected.get(station.code))
-          .filter(Boolean)
+          .filter(isProjectedPoint)
           .map(point => `${point.x},${point.y}`)
           .join(" ");
 
@@ -262,13 +303,13 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
       }
     }
 
-    const routeCodes = new Set();
+    const routeCodes = new Set<string | number>();
     if (plan) {
       routeCodes.add(plan.startStation.code);
       routeCodes.add(plan.endStation.code);
     }
     if (plan?.route?.length) {
-      routeCodes.add(plan.route[0].from.code);
+      routeCodes.add(plan.route[0]!.from.code);
       for (const leg of plan.route) routeCodes.add(leg.to.code);
     }
 
@@ -314,7 +355,7 @@ export function createNetworkMapController({ plannerRoute, svg, tooltip, transla
         label.setAttribute("fill", "rgba(23, 35, 20, 0.88)");
         label.setAttribute("font-family", "IBM Plex Mono, monospace");
         label.setAttribute("font-size", "12");
-        label.textContent = station.displayCode;
+        label.textContent = station.displayCode || station.code;
         group.appendChild(label);
       }
 

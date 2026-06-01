@@ -170,16 +170,24 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
       await serveStatic(request, response);
     } catch (error) {
       const typedError = error as AppError;
-      const statusCode =
-        Number.isInteger(typedError?.statusCode) &&
-        typedError.statusCode >= 400 &&
-        typedError.statusCode <= 599
-          ? typedError.statusCode
-          : Number.isInteger(typedError?.code) &&
-              Number(typedError.code) >= 400 &&
-              Number(typedError.code) <= 599
-            ? Number(typedError.code)
-            : 500;
+      const typedStatusCode = typedError?.statusCode;
+      const typedCode = typedError?.code;
+      let statusCode = 500;
+      if (
+        typeof typedStatusCode === "number" &&
+        Number.isInteger(typedStatusCode) &&
+        typedStatusCode >= 400 &&
+        typedStatusCode <= 599
+      ) {
+        statusCode = typedStatusCode;
+      } else if (
+        typeof typedCode === "number" &&
+        Number.isInteger(typedCode) &&
+        typedCode >= 400 &&
+        typedCode <= 599
+      ) {
+        statusCode = typedCode;
+      }
       const message =
         redactSensitiveText(typedError?.message, [
           typedError?.accessToken,

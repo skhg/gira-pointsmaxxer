@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { chromium } from "playwright-core";
+import { chromium, type Browser, type Page } from "playwright-core";
 
 import { startTestServer } from "./helpers/app-server.js";
 import { buildStation } from "./helpers/stations.js";
@@ -15,13 +15,13 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   "/usr/bin/google-chrome-stable",
   "/usr/bin/chromium",
   "/usr/bin/chromium-browser",
-].filter(Boolean);
+].filter((candidate): candidate is string => Boolean(candidate));
 
 function findChromeExecutable() {
   return CHROME_EXECUTABLE_CANDIDATES.find(candidate => fs.existsSync(candidate)) || null;
 }
 
-async function openSmokePage(browser) {
+async function openSmokePage(browser: Browser): Promise<Page> {
   const page = await browser.newPage();
   await page.route("https://fonts.googleapis.com/**", route => route.fulfill({ body: "", status: 200 }));
   await page.route("https://fonts.gstatic.com/**", route => route.abort());
@@ -29,7 +29,7 @@ async function openSmokePage(browser) {
   return page;
 }
 
-function setFinishTimeOnPage(page, minutesFromNow) {
+function setFinishTimeOnPage(page: Page, minutesFromNow: number) {
   return page.evaluate(offsetMinutes => {
     const finishInput = globalThis.document.getElementById("finishTimeInput") as HTMLInputElement | null;
     const next = new Date(Date.now() + offsetMinutes * 60 * 1000);
@@ -50,7 +50,7 @@ test("browser smoke: demo snapshot can produce a route in the built app", async 
   }
 
   const server = await startTestServer();
-  let browser = null;
+  let browser: Browser | null = null;
 
   try {
     browser = await chromium.launch({
@@ -145,7 +145,7 @@ test("browser smoke: live sign-in loads stations and stays signed in after refre
       refreshToken: "browser-refresh",
     }),
   });
-  let browser = null;
+  let browser: Browser | null = null;
 
   try {
     browser = await chromium.launch({
@@ -182,7 +182,10 @@ test("browser smoke: live sign-in loads stations and stays signed in after refre
       return Boolean(loginForm?.hidden) && sessionStatus?.textContent === "Test Rider";
     });
 
-    assert.equal(await page.locator("#loginForm").evaluate(node => node.hidden), true);
+    assert.equal(
+      await page.locator("#loginForm").evaluate(node => (node as HTMLFormElement).hidden),
+      true
+    );
     assert.equal(await page.locator("#sessionStatus").textContent(), "Test Rider");
   } finally {
     if (browser) await browser.close();
@@ -198,7 +201,7 @@ test("browser smoke: disclaimer page is reachable from hero, footer, and direct 
   }
 
   const server = await startTestServer();
-  let browser = null;
+  let browser: Browser | null = null;
 
   try {
     browser = await chromium.launch({
@@ -281,7 +284,7 @@ test("browser smoke: finish-time edge cases disable planning until enough time r
   }
 
   const server = await startTestServer();
-  let browser = null;
+  let browser: Browser | null = null;
 
   try {
     browser = await chromium.launch({
@@ -339,7 +342,7 @@ test("browser smoke: current-location shortcut resolves the nearest station and 
   }
 
   const server = await startTestServer();
-  let browser = null;
+  let browser: Browser | null = null;
 
   try {
     browser = await chromium.launch({
@@ -404,7 +407,7 @@ test("browser smoke: language picker can persist Portuguese across reloads", asy
   }
 
   const server = await startTestServer();
-  let browser = null;
+  let browser: Browser | null = null;
 
   try {
     browser = await chromium.launch({
@@ -441,6 +444,6 @@ test("browser smoke: language picker can persist Portuguese across reloads", asy
   }
 });
 
-async function expectHeading(page, text) {
+async function expectHeading(page: Page, text: string) {
   await page.getByRole("heading", { level: 1, name: text }).waitFor();
 }
