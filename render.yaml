@@ -1,6 +1,7 @@
 services:
   - type: web
     name: gira-pointsmaxxer
+    region: frankfurt
     runtime: node
     plan: free
     buildCommand: npm install
