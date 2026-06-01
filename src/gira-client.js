@@ -13,7 +13,7 @@ function createError(message, status, code) {
 }
 
 async function webApi(path, options = {}) {
-  let response = null;
+  let response;
 
   try {
     response = await fetch(path, {
