@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gira Pointsmaxxer</title>
+    <title></title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,25 +14,29 @@
   </head>
   <body>
     <div class="shell">
+      <div class="topbar">
+        <label class="language-picker" for="languageSelect">
+          <span id="languageLabel"></span>
+          <select id="languageSelect"></select>
+        </label>
+      </div>
+
       <header class="hero" id="plannerHero">
         <div class="hero__copy">
-          <p class="eyebrow">Lisbon Gira Route Optimizer</p>
-          <h1>Gira Pointsmaxxer</h1>
+          <p class="eyebrow" id="plannerEyebrow"></p>
+          <h1 id="plannerTitle"></h1>
           <p class="lede">
-            Maximise your points by chaining Gira rides between
-            high-occupation starts and high-empty finishes.
-            <a class="hero__link" href="/credits" data-route="/credits">What is this?</a>
+            <span id="plannerLedeText"></span>
+            <a class="hero__link" href="/credits" data-route="/credits" id="plannerWhatIsThisLink"></a>
           </p>
         </div>
       </header>
 
       <header class="hero hero--secondary" id="creditsHero" hidden>
         <div class="hero__copy">
-          <p class="eyebrow">Disclaimer & credits</p>
-          <h1>Disclaimer & credits</h1>
-          <p class="lede">
-            What this app is, where its data comes from, and how to use it responsibly.
-          </p>
+          <p class="eyebrow" id="creditsHeroEyebrow"></p>
+          <h1 id="creditsHeroTitle"></h1>
+          <p class="lede" id="creditsHeroLede"></p>
         </div>
       </header>
 
@@ -40,20 +44,20 @@
         <section class="panel panel--auth" id="authPanel">
           <div class="panel__header">
             <div>
-              <p class="panel__eyebrow">Step 1</p>
-              <h2>Connect your account</h2>
+              <p class="panel__eyebrow" id="authStepEyebrow"></p>
+              <h2 id="authSectionTitle"></h2>
             </div>
-            <button class="ghost-button" id="logoutButton" hidden>Log out</button>
+            <button class="ghost-button" id="logoutButton" hidden></button>
           </div>
 
           <div class="auth-grid">
             <form id="loginForm" class="login-form" autocomplete="on">
               <label>
-                <span>Gira email</span>
+                <span id="emailLabel"></span>
                 <input id="emailInput" name="email" type="email" autocomplete="username" />
               </label>
               <label>
-                <span>Gira password</span>
+                <span id="passwordLabel"></span>
                 <input
                   id="passwordInput"
                   name="password"
@@ -61,35 +65,33 @@
                   autocomplete="current-password"
                 />
               </label>
-              <button type="submit" class="primary-button" id="loginButton">Sign in to Gira</button>
+              <button type="submit" class="primary-button" id="loginButton"></button>
             </form>
 
             <div class="auth-side">
-              <button class="ghost-button" id="demoButton" hidden>Use demo snapshot</button>
-              <p class="tiny-note" id="authSummary">
-                Live mode uses your own Gira account and keeps the session in this browser only.
-              </p>
+              <button class="ghost-button" id="demoButton" hidden></button>
+              <p class="tiny-note" id="authSummary"></p>
             </div>
           </div>
 
           <details class="snapshot-disclosure">
-            <summary>Snapshot details</summary>
+            <summary id="snapshotDisclosureSummary"></summary>
             <div class="snapshot-details-grid">
               <div class="stat-chip">
-                <span class="stat-chip__label">Snapshot</span>
-                <span class="stat-chip__value" id="snapshotSource">None loaded</span>
+                <span class="stat-chip__label" id="snapshotLabel"></span>
+                <span class="stat-chip__value" id="snapshotSource"></span>
               </div>
               <div class="stat-chip">
-                <span class="stat-chip__label">Stations</span>
+                <span class="stat-chip__label" id="stationsLabel"></span>
                 <span class="stat-chip__value" id="stationCount">0</span>
               </div>
               <div class="stat-chip">
-                <span class="stat-chip__label">Session</span>
-                <span class="stat-chip__value" id="sessionStatus">Signed out</span>
+                <span class="stat-chip__label" id="sessionLabel"></span>
+                <span class="stat-chip__value" id="sessionStatus"></span>
               </div>
             </div>
             <div class="snapshot-actions">
-              <button class="secondary-button" id="loadLiveButton" hidden disabled>Refresh live stations</button>
+              <button class="secondary-button" id="loadLiveButton" hidden disabled></button>
             </div>
           </details>
         </section>
@@ -97,24 +99,24 @@
         <section class="panel panel--controls">
           <div class="panel__header">
             <div>
-              <p class="panel__eyebrow">Step 2</p>
-              <h2>Set the challenge</h2>
+              <p class="panel__eyebrow" id="controlsStepEyebrow"></p>
+              <h2 id="controlsSectionTitle"></h2>
             </div>
           </div>
 
           <div class="controls-grid">
             <label>
-              <span>Start station</span>
+              <span id="startStationLabel"></span>
               <div class="field-inline">
                 <select id="startInput" disabled>
-                  <option value="">Connect your account first</option>
+                  <option value=""></option>
                 </select>
                 <button
                   type="button"
                   class="field-inline__button"
                   id="currentLocationButton"
-                  aria-label="Use current location"
-                  title="Use current location"
+                  aria-label=""
+                  title=""
                   disabled
                 >
                   📍
@@ -122,87 +124,81 @@
               </div>
             </label>
             <label>
-              <span>Finish station</span>
+              <span id="endStationLabel"></span>
               <select id="endInput" disabled>
-                <option value="">Connect your account first</option>
+                <option value=""></option>
               </select>
             </label>
             <label>
-              <span>Finish time</span>
+              <span id="finishTimeLabel"></span>
               <input id="finishTimeInput" type="time" step="300" />
-              <small class="field-note" id="finishTimeNote">Choose a finish time for today.</small>
+              <small class="field-note" id="finishTimeNote"></small>
             </label>
             <label>
-              <span>Average cycling speed (km/h)</span>
+              <span id="speedLabel"></span>
               <input id="speedInput" type="number" min="5" max="35" step="0.5" value="15" />
             </label>
             <label>
-              <span>Street detour factor</span>
+              <span id="detourLabel"></span>
               <input id="detourInput" type="number" min="1" max="2" step="0.01" value="1.22" />
             </label>
             <label>
-              <span>Per-ride overhead (minutes)</span>
+              <span id="overheadLabel"></span>
               <input id="overheadInput" type="number" min="0" max="5" step="0.25" value="5" />
             </label>
           </div>
 
           <div class="actions-row">
-            <button class="primary-button" id="planButton" disabled>Find best strategy</button>
-            <p class="tiny-note" id="plannerNote">
-              The optimizer uses the live snapshot, a 30-second time grid, and the minutes remaining until your chosen finish time.
-            </p>
+            <button class="primary-button" id="planButton" disabled></button>
+            <p class="tiny-note" id="plannerNote"></p>
           </div>
         </section>
 
         <section class="panel panel--summary">
           <div class="panel__header">
             <div>
-              <p class="panel__eyebrow">Step 3</p>
-              <h2>Best plan</h2>
+              <p class="panel__eyebrow" id="summaryStepEyebrow"></p>
+              <h2 id="summarySectionTitle"></h2>
             </div>
           </div>
 
           <div class="summary-grid" id="summaryGrid">
             <article class="summary-card">
-              <span class="summary-card__label">Points</span>
+              <span class="summary-card__label" id="pointsLabel"></span>
               <strong class="summary-card__value" id="pointsValue">0</strong>
             </article>
             <article class="summary-card">
-              <span class="summary-card__label">Rides</span>
+              <span class="summary-card__label" id="ridesLabel"></span>
               <strong class="summary-card__value" id="ridesValue">0</strong>
             </article>
             <article class="summary-card">
-              <span class="summary-card__label">Ride time</span>
-              <strong class="summary-card__value" id="timeValue">0 mins</strong>
+              <span class="summary-card__label" id="rideTimeLabel"></span>
+              <strong class="summary-card__value" id="timeValue"></strong>
             </article>
             <article class="summary-card">
-              <span class="summary-card__label">Distance</span>
-              <strong class="summary-card__value" id="distanceValue">0 km</strong>
+              <span class="summary-card__label" id="distanceLabel"></span>
+              <strong class="summary-card__value" id="distanceValue"></strong>
             </article>
           </div>
 
-          <div class="summary-details" id="summaryDetails">
-            <p class="summary-placeholder">
-              Connect your account, refresh live stations, choose a start and finish station, then run the planner.
-            </p>
-          </div>
+          <div class="summary-details" id="summaryDetails"></div>
         </section>
 
         <section class="panel panel--network">
           <div class="panel__header">
             <div>
-              <p class="panel__eyebrow">Network view</p>
-              <h2>Spatial route sketch</h2>
+              <p class="panel__eyebrow" id="networkEyebrow"></p>
+              <h2 id="networkSectionTitle"></h2>
             </div>
             <div class="legend">
-              <span><i class="legend__dot legend__dot--occupied"></i> Start bonus now</span>
-              <span><i class="legend__dot legend__dot--empty"></i> Finish bonus after docking</span>
-              <span><i class="legend__dot legend__dot--route"></i> Planned path</span>
+              <span><i class="legend__dot legend__dot--occupied"></i><span id="legendOccupied"></span></span>
+              <span><i class="legend__dot legend__dot--empty"></i><span id="legendEmpty"></span></span>
+              <span><i class="legend__dot legend__dot--route"></i><span id="legendRoute"></span></span>
             </div>
           </div>
 
           <div class="network-stage">
-            <svg id="networkSvg" viewBox="0 0 1000 700" role="img" aria-label="Projected station network map"></svg>
+            <svg id="networkSvg" viewBox="0 0 1000 700" role="img" aria-label=""></svg>
             <div class="network-tooltip" id="networkTooltip" hidden></div>
             <a
               class="network-attribution"
@@ -210,17 +206,15 @@
               href="https://www.openstreetmap.org/copyright"
               target="_blank"
               rel="noopener noreferrer"
-            >
-              © OpenStreetMap contributors
-            </a>
+            ></a>
           </div>
         </section>
 
         <section class="panel panel--route">
           <div class="panel__header">
             <div>
-              <p class="panel__eyebrow">Ride sequence</p>
-              <h2>Leg-by-leg breakdown</h2>
+              <p class="panel__eyebrow" id="routeEyebrow"></p>
+              <h2 id="routeSectionTitle"></h2>
             </div>
           </div>
           <ol class="route-list" id="routeList"></ol>
@@ -231,87 +225,18 @@
         <section class="panel credits-card">
           <div class="panel__header">
             <div>
-              <p class="panel__eyebrow">Independent project</p>
-              <h2>What to know before you use it</h2>
+              <p class="panel__eyebrow" id="creditsPanelEyebrow"></p>
+              <h2 id="creditsPanelTitle"></h2>
             </div>
-            <a class="ghost-button credits-back-link" href="/" data-route="/">Back to planner</a>
+            <a class="ghost-button credits-back-link" href="/" data-route="/" id="backToPlannerLink"></a>
           </div>
 
-          <div class="credits-sections">
-            <section class="credits-section">
-              <h3>About this app</h3>
-              <p>
-                Gira Pointsmaxxer is an independent project. It is not an official app of
-                EMEL or Gira, and it has no association with them.
-              </p>
-              <p>This app was developed with Codex.</p>
-            </section>
-
-            <section class="credits-section">
-              <h3>What is Gira?</h3>
-              <p>
-                Gira is Lisbon's public bike-sharing system. If you want the official service, maps, and account information, visit the
-                <a href="https://www.gira-bicicletasdelisboa.pt/" target="_blank" rel="noopener noreferrer">official Gira website</a>.
-              </p>
-            </section>
-
-            <section class="credits-section">
-              <h3>Credits & inspiration</h3>
-              <p>
-                Codex used
-                <a href="https://github.com/rt-evil-inc/gira-mais" target="_blank" rel="noopener noreferrer">gira-mais</a>
-                and
-                <a href="https://github.com/afonsosousah/mgira" target="_blank" rel="noopener noreferrer">mGira</a>
-                as references during development, and the work of those projects helped inspire this app.
-              </p>
-              <p>
-                This app was also inspired by the
-                <a href="https://semanadabicicleta.pt/#event-gira" target="_blank" rel="noopener noreferrer">Gira Grand Prix organised as part of Semana da Bicicleta 2026</a>.
-              </p>
-            </section>
-
-            <section class="credits-section">
-              <h3>Privacy</h3>
-              <p>
-                We do not store your Gira password or other user-entered login details, and we do not intentionally record personally identifying details about how you use this app.
-              </p>
-              <p class="credits-note">
-                If you choose to sign in, the app may keep secure session state in your browser so it can stay signed in between refreshes.
-              </p>
-            </section>
-
-            <section class="credits-section">
-              <h3>Safety</h3>
-              <ul class="credits-list">
-                <li>Take reasonable precautions when cycling.</li>
-                <li>Ride safely and responsibly.</li>
-                <li>Follow the rules of the road and any local traffic guidance.</li>
-              </ul>
-            </section>
-
-            <section class="credits-section">
-              <h3>Accuracy & responsibility</h3>
-              <p>
-                The routes generated by this app may or may not be correct. Please use your own judgment, and do not rely on the app as your only source of guidance.
-              </p>
-              <p>
-                We take no responsibility for the accuracy of the information presented.
-              </p>
-              <p>
-                System-capacity and availability data come from the Gira system and may or may not be reliable.
-              </p>
-            </section>
-
-            <section class="credits-section">
-              <h3>Source</h3>
-              <p class="credits-placeholder">Source repository link coming soon.</p>
-            </section>
-          </div>
+          <div class="credits-sections" id="creditsSections"></div>
         </section>
       </main>
 
       <footer class="app-footer" id="appFooter">
-        <a class="app-footer__link" href="/credits" data-route="/credits">Disclaimer & credits</a>
+        <a class="app-footer__link" href="/credits" data-route="/credits" id="footerCreditsLink"></a>
       </footer>
     </div>
 

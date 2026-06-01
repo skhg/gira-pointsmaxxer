@@ -6,6 +6,7 @@ import { chromium } from "playwright-core";
 
 import { startTestServer } from "./helpers/app-server.mjs";
 
+const LANGUAGE_STORAGE_KEY = "gira-pointsmaxxer-language-v1";
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.CHROME_EXECUTABLE_PATH,
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -154,6 +155,88 @@ test("browser smoke: disclaimer page is reachable from hero, footer, and direct 
     assert.match(directLoadText || "", /Source repository link coming soon/iu);
     assert.match(directLoadText || "", /gira-mais/iu);
     assert.match(directLoadText || "", /mGira/iu);
+    assert.match(directLoadText || "", /hosted for free on\s+Render/iu);
+    assert.match(directLoadText || "", /hosted in the EU/iu);
+  } finally {
+    if (browser) await browser.close();
+    await server.app.close();
+  }
+});
+
+test("browser smoke: language picker follows browser language and can persist Portuguese", async t => {
+  const chromeExecutable = findChromeExecutable();
+  if (!chromeExecutable) {
+    t.skip("Google Chrome is not installed on this machine.");
+    return;
+  }
+
+  const server = await startTestServer();
+  let browser = null;
+
+  try {
+    browser = await chromium.launch({
+      executablePath: chromeExecutable,
+      headless: true,
+    });
+
+    const englishPage = await openSmokePage(browser);
+    await englishPage.addInitScript(() => {
+      Object.defineProperty(globalThis.navigator, "language", {
+        configurable: true,
+        get: () => "en-GB",
+      });
+      Object.defineProperty(globalThis.navigator, "languages", {
+        configurable: true,
+        get: () => ["en-GB", "en"],
+      });
+    });
+    await englishPage.goto(`${server.baseUrl}/`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await englishPage.waitForFunction(() => globalThis.document.title === "Gira Pointsmaxxer");
+    assert.equal(await englishPage.locator("#languageSelect").inputValue(), "en");
+
+    const portugueseBrowserPage = await openSmokePage(browser);
+    await portugueseBrowserPage.addInitScript(() => {
+      Object.defineProperty(globalThis.navigator, "language", {
+        configurable: true,
+        get: () => "pt-PT",
+      });
+      Object.defineProperty(globalThis.navigator, "languages", {
+        configurable: true,
+        get: () => ["pt-PT", "pt", "en-GB"],
+      });
+    });
+    await portugueseBrowserPage.goto(`${server.baseUrl}/`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await portugueseBrowserPage.waitForFunction(
+      () => globalThis.document.documentElement.lang === "pt-PT"
+    );
+    assert.equal(await portugueseBrowserPage.locator("#languageSelect").inputValue(), "pt-PT");
+    assert.equal(
+      await portugueseBrowserPage.locator("#authSectionTitle").textContent(),
+      "Liga a tua conta"
+    );
+    assert.equal(
+      await portugueseBrowserPage.locator("#plannerWhatIsThisLink").textContent(),
+      "O que é isto?"
+    );
+
+    const portugueseStoredPage = await openSmokePage(browser);
+    await portugueseStoredPage.addInitScript(storageKey => {
+      globalThis.localStorage.setItem(storageKey, "pt-PT");
+    }, LANGUAGE_STORAGE_KEY);
+    await portugueseStoredPage.goto(`${server.baseUrl}/`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await portugueseStoredPage.waitForFunction(
+      () => globalThis.document.documentElement.lang === "pt-PT"
+    );
+    assert.equal(await portugueseStoredPage.locator("#languageSelect").inputValue(), "pt-PT");
   } finally {
     if (browser) await browser.close();
     await server.app.close();

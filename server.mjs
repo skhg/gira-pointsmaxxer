@@ -234,6 +234,7 @@ function sanitizeAuthFailure(status, context = "login") {
   const statusCode = status >= 400 ? status : 401;
   if (context === "refresh") {
     return {
+      code: "session_expired",
       statusCode,
       message: "Your Gira session expired. Please sign in again.",
     };
@@ -241,12 +242,14 @@ function sanitizeAuthFailure(status, context = "login") {
 
   if (statusCode === 429) {
     return {
+      code: "auth_rate_limited",
       statusCode,
       message: "The Gira authentication service is temporarily rate limiting requests.",
     };
   }
 
   return {
+    code: "invalid_credentials",
     statusCode,
     message: "The Gira email or password was not accepted.",
   };
@@ -339,6 +342,7 @@ function createDefaultPublicStationsLoader() {
 
     if (!response.ok || !Array.isArray(response.body)) {
       throw {
+        code: "public_station_catalog_unavailable",
         statusCode: response.status || 502,
         message: "The EMEL public station catalog is unavailable.",
       };
@@ -418,7 +422,8 @@ function createDefaultStationFetcher({ refreshSession, loadPublicStations }) {
 
     if (!response.ok || !response.body?.data?.getStations) {
       throw {
-        code: response.status,
+        code: "live_station_snapshot_unavailable",
+        statusCode: response.status || 502,
         message: "The Gira live station API did not return a usable snapshot.",
       };
     }
@@ -516,6 +521,7 @@ export function createAppServer(options = {}) {
     const attempts = getActiveLoginAttempts(ipAddress);
     if (attempts.length >= LOGIN_MAX_ATTEMPTS) {
       throw {
+        code: "login_attempts_rate_limited",
         statusCode: 429,
         message: "Too many sign-in attempts from this network. Please wait 10 minutes and try again.",
       };
@@ -715,6 +721,7 @@ export function createAppServer(options = {}) {
 
         if (!email || !password) {
           writeJson(response, 400, {
+            code: "missing_credentials",
             error: "Email and password are required.",
           });
           return;
@@ -756,6 +763,7 @@ export function createAppServer(options = {}) {
         if (!session) {
           if (request.__clearAuthCookies) clearAuthCookies(request, response);
           writeJson(response, 401, {
+            code: "login_required",
             error: "You need to log in with your Gira account first.",
           });
           return;
@@ -797,6 +805,7 @@ export function createAppServer(options = {}) {
           error?.refreshToken,
         ]) || "Unexpected server error.";
       writeJson(response, statusCode, {
+        code: typeof error?.code === "string" ? error.code : "genericServer",
         error: message,
       });
     }

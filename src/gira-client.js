@@ -5,25 +5,32 @@ function getWebStorage() {
   return typeof localStorage !== "undefined" ? localStorage : null;
 }
 
-function createError(message, status) {
-  const error = new Error(message || "Request failed.");
+function createError(message, status, code) {
+  const error = new Error(String(message || ""));
+  error.code = code || "genericRequest";
   error.status = status;
   return error;
 }
 
 async function webApi(path, options = {}) {
-  const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  let response = null;
+
+  try {
+    response = await fetch(path, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+  } catch (error) {
+    throw createError(error?.message, 0, "genericRequest");
+  }
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw createError(data.error || "Request failed.", response.status);
+    throw createError(data.error, response.status, data.code || "genericServer");
   }
 
   return data;

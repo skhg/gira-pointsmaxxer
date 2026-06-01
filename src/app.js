@@ -16,6 +16,15 @@ import {
   finishBonusRatioAfterDock,
   occupiedRatioNow,
 } from "./lib/planner.js";
+import {
+  SUPPORTED_LANGUAGES,
+  detectInitialLanguage,
+  getMessages,
+  hasTranslation,
+  resolveLanguage,
+  storeLanguage,
+  translate,
+} from "./i18n.js";
 import { demoStations } from "../testing/fixtures/demo-stations.js";
 
 const MAP_TILE_SIZE = 256;
@@ -27,8 +36,6 @@ const MERCATOR_MAX_LATITUDE = 85.05112878;
 const DEFAULT_CHALLENGE_MINUTES = 120;
 const PLANNER_ROUTE = "/";
 const CREDITS_ROUTE = "/credits";
-const DEFAULT_PAGE_TITLE = "Gira Pointsmaxxer";
-const CREDITS_PAGE_TITLE = "Disclaimer & Credits · Gira Pointsmaxxer";
 const CURRENT_LOCATION_VALUE = "__current_location__";
 const CURRENT_LOCATION_ORIGIN_CODE = "__current_location_origin__";
 const CURRENT_LOCATION_CACHE_MS = 1000 * 60 * 2;
@@ -39,6 +46,7 @@ const MINIMUM_REMAINING_MINUTES = 5;
 const state = {
   currentLocation: null,
   currentRoute: PLANNER_ROUTE,
+  language: detectInitialLanguage(),
   source: null,
   fetchedAt: null,
   isResolvingCurrentLocation: false,
@@ -52,41 +60,97 @@ const elements = {
   appFooter: document.getElementById("appFooter"),
   authPanel: document.getElementById("authPanel"),
   authSummary: document.getElementById("authSummary"),
+  authSectionTitle: document.getElementById("authSectionTitle"),
+  authStepEyebrow: document.getElementById("authStepEyebrow"),
+  backToPlannerLink: document.getElementById("backToPlannerLink"),
   creditsHero: document.getElementById("creditsHero"),
+  creditsHeroEyebrow: document.getElementById("creditsHeroEyebrow"),
+  creditsHeroLede: document.getElementById("creditsHeroLede"),
+  creditsHeroTitle: document.getElementById("creditsHeroTitle"),
+  creditsPanelEyebrow: document.getElementById("creditsPanelEyebrow"),
   creditsPage: document.getElementById("creditsPage"),
+  creditsPanelTitle: document.getElementById("creditsPanelTitle"),
+  creditsSections: document.getElementById("creditsSections"),
+  controlsSectionTitle: document.getElementById("controlsSectionTitle"),
+  controlsStepEyebrow: document.getElementById("controlsStepEyebrow"),
   currentLocationButton: document.getElementById("currentLocationButton"),
   demoButton: document.getElementById("demoButton"),
   detourInput: document.getElementById("detourInput"),
+  detourLabel: document.getElementById("detourLabel"),
   distanceValue: document.getElementById("distanceValue"),
+  distanceLabel: document.getElementById("distanceLabel"),
   emailInput: document.getElementById("emailInput"),
+  emailLabel: document.getElementById("emailLabel"),
   endInput: document.getElementById("endInput"),
+  endStationLabel: document.getElementById("endStationLabel"),
+  finishTimeLabel: document.getElementById("finishTimeLabel"),
   finishTimeInput: document.getElementById("finishTimeInput"),
   finishTimeNote: document.getElementById("finishTimeNote"),
+  footerCreditsLink: document.getElementById("footerCreditsLink"),
+  languageLabel: document.getElementById("languageLabel"),
+  languageSelect: document.getElementById("languageSelect"),
+  legendEmpty: document.getElementById("legendEmpty"),
+  legendOccupied: document.getElementById("legendOccupied"),
+  legendRoute: document.getElementById("legendRoute"),
   loadLiveButton: document.getElementById("loadLiveButton"),
   loginButton: document.getElementById("loginButton"),
   loginForm: document.getElementById("loginForm"),
   logoutButton: document.getElementById("logoutButton"),
   networkSvg: document.getElementById("networkSvg"),
+  networkAttribution: document.getElementById("networkAttribution"),
   networkTooltip: document.getElementById("networkTooltip"),
+  networkEyebrow: document.getElementById("networkEyebrow"),
+  networkSectionTitle: document.getElementById("networkSectionTitle"),
   overheadInput: document.getElementById("overheadInput"),
+  overheadLabel: document.getElementById("overheadLabel"),
   passwordInput: document.getElementById("passwordInput"),
+  passwordLabel: document.getElementById("passwordLabel"),
   planButton: document.getElementById("planButton"),
   plannerNote: document.getElementById("plannerNote"),
+  plannerEyebrow: document.getElementById("plannerEyebrow"),
+  plannerLedeText: document.getElementById("plannerLedeText"),
+  plannerTitle: document.getElementById("plannerTitle"),
+  plannerWhatIsThisLink: document.getElementById("plannerWhatIsThisLink"),
   pointsValue: document.getElementById("pointsValue"),
+  pointsLabel: document.getElementById("pointsLabel"),
   plannerHero: document.getElementById("plannerHero"),
   ridesValue: document.getElementById("ridesValue"),
+  ridesLabel: document.getElementById("ridesLabel"),
   plannerPage: document.getElementById("plannerPage"),
   routeLinks: Array.from(document.querySelectorAll("[data-route]")),
+  routeEyebrow: document.getElementById("routeEyebrow"),
   routeList: document.getElementById("routeList"),
+  routeSectionTitle: document.getElementById("routeSectionTitle"),
   sessionStatus: document.getElementById("sessionStatus"),
+  sessionLabel: document.getElementById("sessionLabel"),
   snapshotSource: document.getElementById("snapshotSource"),
+  snapshotDisclosureSummary: document.getElementById("snapshotDisclosureSummary"),
+  snapshotLabel: document.getElementById("snapshotLabel"),
   speedInput: document.getElementById("speedInput"),
+  speedLabel: document.getElementById("speedLabel"),
   startInput: document.getElementById("startInput"),
+  startStationLabel: document.getElementById("startStationLabel"),
   stationCount: document.getElementById("stationCount"),
+  stationsLabel: document.getElementById("stationsLabel"),
   summaryDetails: document.getElementById("summaryDetails"),
+  summarySectionTitle: document.getElementById("summarySectionTitle"),
+  summaryStepEyebrow: document.getElementById("summaryStepEyebrow"),
   timeValue: document.getElementById("timeValue"),
+  rideTimeLabel: document.getElementById("rideTimeLabel"),
   toast: document.getElementById("toast"),
 };
+
+function t(key, values = {}) {
+  return translate(state.language, key, values);
+}
+
+function hasText(key) {
+  return hasTranslation(state.language, key);
+}
+
+function getLocale() {
+  return getMessages(state.language).locale;
+}
 
 function showToast(message, type = "info") {
   elements.toast.textContent = message;
@@ -96,6 +160,148 @@ function showToast(message, type = "info") {
   showToast.timeoutId = setTimeout(() => {
     elements.toast.hidden = true;
   }, 4000);
+}
+
+function createAppError(translationKey, values = {}) {
+  const error = new Error(translationKey);
+  error.translationKey = translationKey;
+  error.translationValues = values;
+  return error;
+}
+
+function getErrorMessage(error) {
+  if (error?.translationKey) {
+    return t(error.translationKey, error.translationValues);
+  }
+
+  if (error?.code && hasText(`errors.${error.code}`)) {
+    return t(`errors.${error.code}`);
+  }
+
+  return error?.message || t("errors.genericRequest");
+}
+
+function formatHtmlString(value) {
+  return String(value || "");
+}
+
+function renderCreditsSections() {
+  const creditsSections = getMessages(state.language).credits.sections;
+  elements.creditsSections.innerHTML = "";
+
+  for (const section of creditsSections) {
+    const sectionElement = document.createElement("section");
+    sectionElement.className = "credits-section";
+
+    let content = `<h3>${escapeHtml(section.title)}</h3>`;
+
+    for (const paragraph of section.paragraphs || []) {
+      content += `<p>${escapeHtml(paragraph)}</p>`;
+    }
+
+    for (const paragraph of section.paragraphsHtml || []) {
+      content += `<p>${formatHtmlString(paragraph)}</p>`;
+    }
+
+    if (Array.isArray(section.list) && section.list.length > 0) {
+      content += `<ul class="credits-list">${section.list
+        .map(item => `<li>${escapeHtml(item)}</li>`)
+        .join("")}</ul>`;
+    }
+
+    if (section.note) {
+      content += `<p class="credits-note">${escapeHtml(section.note)}</p>`;
+    }
+
+    if (section.placeholder) {
+      content += `<p class="credits-placeholder">${escapeHtml(section.placeholder)}</p>`;
+    }
+
+    sectionElement.innerHTML = content;
+    elements.creditsSections.appendChild(sectionElement);
+  }
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = state.language;
+  elements.languageLabel.textContent = t("language.label");
+  elements.plannerEyebrow.textContent = t("hero.eyebrow");
+  elements.plannerTitle.textContent = t("hero.title");
+  elements.plannerLedeText.textContent = `${t("hero.lede")} `;
+  elements.plannerWhatIsThisLink.textContent = t("hero.whatIsThis");
+  elements.creditsHeroEyebrow.textContent = t("creditsHero.eyebrow");
+  elements.creditsHeroTitle.textContent = t("creditsHero.title");
+  elements.creditsHeroLede.textContent = t("creditsHero.lede");
+  elements.authStepEyebrow.textContent = t("auth.step");
+  elements.authSectionTitle.textContent = t("auth.title");
+  elements.emailLabel.textContent = t("auth.emailLabel");
+  elements.passwordLabel.textContent = t("auth.passwordLabel");
+  elements.logoutButton.textContent = t("auth.logout");
+  elements.demoButton.textContent = t("auth.useDemoSnapshot");
+  elements.snapshotDisclosureSummary.textContent = t("snapshot.disclosure");
+  elements.snapshotLabel.textContent = t("snapshot.snapshot");
+  elements.stationsLabel.textContent = t("snapshot.stations");
+  elements.sessionLabel.textContent = t("snapshot.session");
+  elements.controlsStepEyebrow.textContent = t("controls.step");
+  elements.controlsSectionTitle.textContent = t("controls.title");
+  elements.startStationLabel.textContent = t("controls.startStation");
+  elements.endStationLabel.textContent = t("controls.finishStation");
+  elements.finishTimeLabel.textContent = t("controls.finishTime");
+  elements.speedLabel.textContent = t("controls.speed");
+  elements.detourLabel.textContent = t("controls.detourFactor");
+  elements.overheadLabel.textContent = t("controls.overhead");
+  elements.currentLocationButton.setAttribute("aria-label", t("controls.currentLocationButtonLabel"));
+  elements.currentLocationButton.setAttribute("title", t("controls.currentLocationButtonLabel"));
+  elements.planButton.textContent = t("controls.findBestStrategy");
+  elements.plannerNote.textContent = t("controls.plannerNote");
+  elements.summaryStepEyebrow.textContent = t("summary.step");
+  elements.summarySectionTitle.textContent = t("summary.title");
+  elements.pointsLabel.textContent = t("summary.points");
+  elements.ridesLabel.textContent = t("summary.rides");
+  elements.rideTimeLabel.textContent = t("summary.rideTime");
+  elements.distanceLabel.textContent = t("summary.distance");
+  elements.networkEyebrow.textContent = t("network.eyebrow");
+  elements.networkSectionTitle.textContent = t("network.title");
+  elements.legendOccupied.textContent = t("network.legendOccupied");
+  elements.legendEmpty.textContent = t("network.legendEmpty");
+  elements.legendRoute.textContent = t("network.legendRoute");
+  elements.networkSvg.setAttribute("aria-label", t("network.ariaLabel"));
+  elements.networkAttribution.textContent = t("network.attribution");
+  elements.routeEyebrow.textContent = t("route.eyebrow");
+  elements.routeSectionTitle.textContent = t("route.title");
+  elements.creditsPanelEyebrow.textContent = t("credits.panelEyebrow");
+  elements.creditsPanelTitle.textContent = t("credits.panelTitle");
+  elements.backToPlannerLink.textContent = t("credits.backToPlanner");
+  elements.footerCreditsLink.textContent = t("credits.footerLink");
+  renderCreditsSections();
+}
+
+function initializeLanguagePicker() {
+  elements.languageSelect.innerHTML = "";
+
+  for (const language of SUPPORTED_LANGUAGES) {
+    const option = document.createElement("option");
+    option.value = language.code;
+    option.textContent = language.label;
+    elements.languageSelect.appendChild(option);
+  }
+}
+
+function applyLanguage(options = {}) {
+  const { persist = false } = options;
+  state.language = resolveLanguage(state.language);
+  elements.languageSelect.value = state.language;
+  if (persist) {
+    storeLanguage(state.language);
+  }
+
+  applyStaticTranslations();
+  updateDocumentTitle(state.currentRoute);
+  setUser(state.user);
+  renderStationOptions();
+  renderSnapshotMeta();
+  renderPlan(state.plan);
+  updatePlannerAvailability();
 }
 
 function hideNetworkTooltip() {
@@ -127,9 +333,21 @@ function showNetworkTooltip(station, position) {
   elements.networkTooltip.dataset.stationCode = station.code;
   elements.networkTooltip.innerHTML = `
     <strong>${escapeHtml(station.label)}</strong>
-    <div>${station.bikes}/${station.docks} bikes occupied</div>
-    <div>Start bonus now: ${occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD ? "Yes" : "No"}</div>
-    <div>Finish bonus after docking: ${finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD ? "Yes" : "No"}</div>
+    <div>${escapeHtml(t("network.tooltipOccupied", { bikes: station.bikes, docks: station.docks }))}</div>
+    <div>${escapeHtml(
+      t("network.tooltipStartBonus", {
+        value:
+          occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD ? t("network.yes") : t("network.no"),
+      })
+    )}</div>
+    <div>${escapeHtml(
+      t("network.tooltipFinishBonus", {
+        value:
+          finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD
+            ? t("network.yes")
+            : t("network.no"),
+      })
+    )}</div>
   `;
   elements.networkTooltip.hidden = false;
   positionNetworkTooltip(position);
@@ -161,7 +379,7 @@ function syncCanonicalRoute() {
 }
 
 function updateDocumentTitle(route) {
-  document.title = route === CREDITS_ROUTE ? CREDITS_PAGE_TITLE : DEFAULT_PAGE_TITLE;
+  document.title = route === CREDITS_ROUTE ? t("creditsPageTitle") : t("pageTitle");
 }
 
 function renderRoute(options = {}) {
@@ -224,7 +442,7 @@ function formatTimeInputValue(date) {
 }
 
 function formatClockTime(date) {
-  return new Intl.DateTimeFormat([], {
+  return new Intl.DateTimeFormat(getLocale(), {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
@@ -234,7 +452,8 @@ function formatMinuteValue(value, decimals = 0) {
   const safeValue = Math.max(0, Number(value) || 0);
   const displayValue = decimals > 0 ? safeValue.toFixed(decimals) : String(Math.floor(safeValue));
   const numericValue = Number(displayValue);
-  const unit = Math.abs(numericValue - 1) < 1e-9 ? "min" : "mins";
+  const unit =
+    Math.abs(numericValue - 1) < 1e-9 ? t("units.minuteOne") : t("units.minuteOther");
   return `${displayValue} ${unit}`;
 }
 
@@ -244,8 +463,8 @@ function formatRemainingTime(minutes) {
 
   const hours = Math.floor(totalMinutes / 60);
   const remainder = totalMinutes % 60;
-  if (remainder === 0) return `${hours}h`;
-  return `${hours}h ${formatMinuteValue(remainder)}`;
+  if (remainder === 0) return `${hours}${t("units.hour")}`;
+  return `${hours}${t("units.hour")} ${formatMinuteValue(remainder)}`;
 }
 
 function roundUpToStep(date, stepMinutes) {
@@ -308,7 +527,7 @@ function getFinishTimeStatus(now = new Date()) {
   const parsed = parseFinishTimeValue(elements.finishTimeInput.value);
   if (!parsed) {
     return {
-      message: "Choose a finish time for today.",
+      message: t("finishTime.chooseToday"),
       state: "warning",
       valid: false,
     };
@@ -322,7 +541,9 @@ function getFinishTimeStatus(now = new Date()) {
   if (remainingMinutes <= 0) {
     return {
       deadline,
-      message: `${formatClockTime(deadline)} has already passed today. Choose a later finish time.`,
+      message: t("finishTime.passedToday", {
+        time: formatClockTime(deadline),
+      }),
       remainingMinutes,
       state: "error",
       valid: false,
@@ -332,7 +553,11 @@ function getFinishTimeStatus(now = new Date()) {
   if (remainingMinutes < MINIMUM_REMAINING_MINUTES) {
     return {
       deadline,
-      message: `Only ${formatRemainingTime(remainingMinutes)} remain until ${formatClockTime(deadline)}. Choose at least ${MINIMUM_REMAINING_MINUTES} minutes from now.`,
+      message: t("finishTime.tooSoon", {
+        minimum: MINIMUM_REMAINING_MINUTES,
+        remaining: formatRemainingTime(remainingMinutes),
+        time: formatClockTime(deadline),
+      }),
       remainingMinutes,
       state: "warning",
       valid: false,
@@ -341,7 +566,10 @@ function getFinishTimeStatus(now = new Date()) {
 
   return {
     deadline,
-    message: `${formatRemainingTime(remainingMinutes)} remaining until ${formatClockTime(deadline)}.`,
+    message: t("finishTime.remainingUntil", {
+      remaining: formatRemainingTime(remainingMinutes),
+      time: formatClockTime(deadline),
+    }),
     remainingMinutes,
     state: "ok",
     valid: true,
@@ -374,7 +602,7 @@ function setStations(stations, source, fetchedAt) {
       displayCode: getStationDisplayCode(station),
       label: formatStationLabel(station),
     }))
-    .sort((left, right) => left.label.localeCompare(right.label, "en", { numeric: true }));
+    .sort((left, right) => left.label.localeCompare(right.label, getLocale(), { numeric: true }));
 
   state.source = source;
   state.fetchedAt = fetchedAt;
@@ -389,8 +617,15 @@ function setStations(stations, source, fetchedAt) {
 
 function renderSnapshotMeta() {
   elements.snapshotSource.textContent = state.source
-    ? `${state.source === "live" ? "Live Gira" : "Demo"}${state.fetchedAt ? ` · ${new Date(state.fetchedAt).toLocaleTimeString()}` : ""}`
-    : "None loaded";
+    ? `${state.source === "live" ? t("snapshot.live") : t("snapshot.demo")}${
+        state.fetchedAt
+          ? ` · ${new Date(state.fetchedAt).toLocaleTimeString(getLocale(), {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`
+          : ""
+      }`
+    : t("snapshot.noneLoaded");
   elements.stationCount.textContent = String(state.stations.length);
   updatePlannerAvailability();
 }
@@ -405,22 +640,32 @@ function renderStationOptions() {
 
     const placeholderOption = document.createElement("option");
     placeholderOption.value = "";
-    placeholderOption.textContent = state.stations.length === 0 ? "Refresh live stations first" : "Choose a station";
+    placeholderOption.textContent =
+      state.stations.length === 0
+        ? state.user
+          ? t("controls.refreshLiveStationsFirst")
+          : t("controls.connectAccountFirst")
+        : t("controls.chooseStation");
     selectElement.appendChild(placeholderOption);
 
     if (includeCurrentLocation) {
       const currentLocationOption = document.createElement("option");
       currentLocationOption.value = CURRENT_LOCATION_VALUE;
       currentLocationOption.textContent = state.currentLocation?.nearestStationLabel
-        ? `Current location · nearest ${state.currentLocation.nearestStationLabel}`
-        : "Current location";
+        ? t("controls.currentLocationNearest", {
+            label: state.currentLocation.nearestStationLabel,
+          })
+        : t("controls.currentLocation");
       selectElement.appendChild(currentLocationOption);
     }
 
     for (const station of state.stations) {
       const option = document.createElement("option");
       option.value = station.code;
-      option.textContent = `${station.label} · ${station.bikes}/${station.docks} bikes`;
+      option.textContent = `${station.label} · ${t("network.tooltipOccupied", {
+        bikes: station.bikes,
+        docks: station.docks,
+      })}`;
       selectElement.appendChild(option);
     }
 
@@ -446,15 +691,21 @@ function setUser(user) {
   const authenticated = Boolean(user);
   elements.authPanel.classList.toggle("panel--auth-signed-in", authenticated);
   elements.loginForm.hidden = authenticated;
-  elements.sessionStatus.textContent = authenticated ? user.name || user.email || "Signed in" : "Signed out";
+  elements.sessionStatus.textContent = authenticated
+    ? user.name || user.email || t("auth.sessionSignedIn")
+    : t("auth.sessionSignedOut");
   elements.logoutButton.hidden = !authenticated;
   elements.loadLiveButton.hidden = !authenticated;
   elements.loadLiveButton.disabled = !authenticated;
   elements.loginButton.disabled = false;
   elements.demoButton.hidden = authenticated || !isLocalDevelopmentHost();
+  elements.loginButton.textContent = t("auth.signIn");
+  elements.loadLiveButton.textContent = t("snapshot.refreshLiveStations");
   elements.authSummary.textContent = authenticated
-    ? `Signed in as ${user.name || user.email}. Live snapshots stay server-side for this app, and the saved sign-in stays in this browser until you log out.`
-    : "Live mode uses your own Gira account and can remember your sign-in in this browser between refreshes until you log out.";
+    ? t("auth.summarySignedIn", {
+        name: user.name || user.email,
+      })
+    : t("auth.summarySignedOut");
 }
 
 async function syncSession() {
@@ -472,7 +723,7 @@ async function hydrateSavedCredentials() {
 async function login(event) {
   event.preventDefault();
   elements.loginButton.disabled = true;
-  elements.loginButton.textContent = "Signing in...";
+  elements.loginButton.textContent = t("auth.signingIn");
 
   const email = elements.emailInput.value.trim();
   const password = elements.passwordInput.value;
@@ -483,12 +734,12 @@ async function login(event) {
     elements.passwordInput.value = "";
 
     setUser(data.user);
-    showToast("Signed in. Loading the latest Gira snapshot...");
+    showToast(t("toasts.signInAndLoad"));
     await loadLiveStations();
   } catch (error) {
-    showToast(error.message, "error");
+    showToast(getErrorMessage(error), "error");
     elements.loginButton.disabled = false;
-    elements.loginButton.textContent = "Sign in to Gira";
+    elements.loginButton.textContent = t("auth.signIn");
   }
 }
 
@@ -500,32 +751,36 @@ async function logout() {
   setUser(null);
   elements.emailInput.value = "";
   elements.passwordInput.value = "";
-  elements.loginButton.textContent = "Sign in to Gira";
-  showToast("Signed out and cleared the saved sign-in.");
+  elements.loginButton.textContent = t("auth.signIn");
+  showToast(t("toasts.signOutCleared"));
 }
 
 async function loadLiveStations() {
   elements.loadLiveButton.disabled = true;
-  elements.loadLiveButton.textContent = "Refreshing...";
+  elements.loadLiveButton.textContent = t("snapshot.refreshing");
 
   try {
     const data = await loadLiveSnapshot();
     setStations(data.stations, data.source, data.fetchedAt);
     setUser(data.user || state.user);
-    showToast(`Loaded ${data.stationCount} live stations.`);
+    showToast(
+      t("snapshot.loadedLiveStations", {
+        count: data.stationCount,
+      })
+    );
   } catch (error) {
-    showToast(error.message, "error");
+    showToast(getErrorMessage(error), "error");
   } finally {
     elements.loadLiveButton.disabled = !state.user;
-    elements.loadLiveButton.textContent = "Refresh live stations";
+    elements.loadLiveButton.textContent = t("snapshot.refreshLiveStations");
     elements.loginButton.disabled = false;
-    elements.loginButton.textContent = "Sign in to Gira";
+    elements.loginButton.textContent = t("auth.signIn");
   }
 }
 
 function loadDemoStations() {
   setStations(demoStations, "demo", new Date().toISOString());
-  showToast("Loaded the bundled demo snapshot.");
+  showToast(t("snapshot.loadedDemoSnapshot"));
 }
 
 function getSelectedStation(inputElement) {
@@ -538,19 +793,19 @@ function createCurrentLocationOrigin(position) {
     bikes: 0,
     code: CURRENT_LOCATION_ORIGIN_CODE,
     docks: 0,
-    label: "Current location",
+    label: t("controls.currentLocation"),
     latitude: Number(position.latitude),
     longitude: Number(position.longitude),
-    name: "Current location",
+    name: t("controls.currentLocation"),
     serialNumber: CURRENT_LOCATION_ORIGIN_CODE,
   };
 }
 
 function getCurrentLocationErrorMessage(error) {
-  if (error?.code === 1) return "Location permission was denied for this app.";
-  if (error?.code === 2) return "The device could not determine the current location.";
-  if (error?.code === 3) return "Timed out while requesting the current GPS position.";
-  return error?.message || "Could not determine the current location.";
+  if (error?.code === 1) return t("errors.locationPermissionDenied");
+  if (error?.code === 2) return t("errors.locationUnavailable");
+  if (error?.code === 3) return t("errors.locationTimeout");
+  return error?.message || t("errors.currentLocationUnavailable");
 }
 
 async function requestCurrentLocationPosition(options = {}) {
@@ -583,7 +838,7 @@ async function requestCurrentLocationPosition(options = {}) {
   }
 
   if (!navigator.geolocation) {
-    throw new Error("This browser or device does not expose GPS location.");
+    throw createAppError("errors.geolocationUnsupported");
   }
 
   return new Promise((resolve, reject) => {
@@ -617,14 +872,16 @@ function updateCurrentLocationOptionLabel() {
   if (!option) return;
 
   option.textContent = state.currentLocation?.nearestStationLabel
-    ? `Current location · nearest ${state.currentLocation.nearestStationLabel}`
-    : "Current location";
+    ? t("controls.currentLocationNearest", {
+        label: state.currentLocation.nearestStationLabel,
+      })
+    : t("controls.currentLocation");
 }
 
 async function resolveCurrentLocationStart(options = {}) {
   const { forceRefresh = false } = options;
   if (state.stations.length === 0) {
-    throw new Error("Load a station snapshot before using Current Location.");
+    throw createAppError("errors.loadSnapshotFirst");
   }
 
   const cachedLocation =
@@ -643,7 +900,7 @@ async function resolveCurrentLocationStart(options = {}) {
   );
 
   if (!nearestStation) {
-    throw new Error("No active Gira stations are available near the current location.");
+    throw createAppError("errors.noActiveStationsNearLocation");
   }
 
   state.currentLocation = {
@@ -669,18 +926,22 @@ async function activateCurrentLocation(options = {}) {
   state.isResolvingCurrentLocation = true;
   elements.currentLocationButton.textContent = "📍…";
   updatePlannerAvailability();
-  showToast("Checking your current location...");
+  showToast(t("toasts.checkingCurrentLocation"));
 
   try {
     const resolved = await resolveCurrentLocationStart({ forceRefresh });
     elements.startInput.value = CURRENT_LOCATION_VALUE;
-    showToast(`Current location resolved to ${resolved.station.label}.`);
+    showToast(
+      t("toasts.currentLocationResolved", {
+        label: resolved.station.label,
+      })
+    );
     return resolved;
   } catch (error) {
     if (preserveSelectionOnFailure) {
       elements.startInput.value = previousStartValue;
     }
-    showToast(error.message, "error");
+    showToast(getErrorMessage(error), "error");
     throw error;
   } finally {
     state.isResolvingCurrentLocation = false;
@@ -695,12 +956,12 @@ async function handleStartSelectionChange() {
 }
 
 function formatMinutes(minutes) {
-  if (!Number.isFinite(minutes)) return "0 mins";
+  if (!Number.isFinite(minutes)) return `0 ${t("units.minuteOther")}`;
   if (minutes < 60) return formatMinuteValue(minutes, 1);
   const hours = Math.floor(minutes / 60);
   const remainder = minutes - hours * 60;
-  if (remainder < 0.05) return `${hours}h`;
-  return `${hours}h ${formatMinuteValue(remainder, 1)}`;
+  if (remainder < 0.05) return `${hours}${t("units.hour")}`;
+  return `${hours}${t("units.hour")} ${formatMinuteValue(remainder, 1)}`;
 }
 
 function renderPlan(plan) {
@@ -708,13 +969,15 @@ function renderPlan(plan) {
 
   elements.pointsValue.textContent = plan ? String(plan.points) : "0";
   elements.ridesValue.textContent = plan ? String(plan.rides) : "0";
-  elements.timeValue.textContent = plan ? formatMinutes(plan.totalTravelMinutes) : "0 mins";
-  elements.distanceValue.textContent = plan ? `${plan.totalDistanceKm.toFixed(1)} km` : "0 km";
+  elements.timeValue.textContent = plan ? formatMinutes(plan.totalTravelMinutes) : `0 ${t("units.minuteOther")}`;
+  elements.distanceValue.textContent = plan
+    ? `${plan.totalDistanceKm.toFixed(1)} ${t("units.kilometer")}`
+    : `0 ${t("units.kilometer")}`;
 
   if (!plan) {
     elements.summaryDetails.innerHTML = `
       <p class="summary-placeholder">
-        Connect your account, refresh live stations, choose a start and finish station, then run the planner.
+        ${escapeHtml(t("summary.placeholder"))}
       </p>
     `;
     elements.routeList.innerHTML = "";
@@ -729,12 +992,14 @@ function renderPlan(plan) {
     plan.bikePickupStation.code !== plan.startStation.code
       ? escapeHtml(plan.bikePickupStation.label)
       : "";
-  const safeStartLabel = escapeHtml(plan.startOrigin ? "Current location" : plan.startStation.label);
+  const safeStartLabel = escapeHtml(
+    plan.startOrigin ? t("controls.currentLocation") : plan.startStation.label
+  );
   const safeEndLabel = escapeHtml(plan.endStation.label);
   const nearestStationMarkup = plan.startOrigin
     ? `
       <div>
-        <dt>Nearest station</dt>
+        <dt>${escapeHtml(t("summary.nearestStation"))}</dt>
         <dd>${safeNearestStationLabel}</dd>
       </div>
     `
@@ -742,7 +1007,7 @@ function renderPlan(plan) {
   const pickupMarkup = plan.bikePickupStation.code !== plan.startStation.code
     ? `
       <div>
-        <dt>Bike pickup station</dt>
+        <dt>${escapeHtml(t("summary.bikePickupStation"))}</dt>
         <dd>${safePickupLabel}</dd>
       </div>
     `
@@ -750,8 +1015,8 @@ function renderPlan(plan) {
   const initialWalkingMarkup = plan.totalWalkMinutes > 0
     ? `
       <div>
-        <dt>Initial walking</dt>
-        <dd>${formatMinutes(plan.totalWalkMinutes)} · ${plan.totalWalkDistanceKm.toFixed(1)} km</dd>
+        <dt>${escapeHtml(t("summary.initialWalking"))}</dt>
+        <dd>${formatMinutes(plan.totalWalkMinutes)} · ${plan.totalWalkDistanceKm.toFixed(1)} ${t("units.kilometer")}</dd>
       </div>
     `
     : "";
@@ -759,46 +1024,46 @@ function renderPlan(plan) {
   elements.summaryDetails.innerHTML = `
     <dl class="summary-breakdown">
       <div>
-        <dt>Planned at</dt>
+        <dt>${escapeHtml(t("summary.plannedAt"))}</dt>
         <dd>${formatClockTime(plan.plannedAt)}</dd>
       </div>
       <div>
-        <dt>Finish by</dt>
+        <dt>${escapeHtml(t("summary.finishBy"))}</dt>
         <dd>${formatClockTime(plan.challengeFinishTime)}</dd>
       </div>
       <div>
-        <dt>Minutes remaining</dt>
+        <dt>${escapeHtml(t("summary.minutesRemaining"))}</dt>
         <dd>${formatMinutes(plan.challengeRemainingMinutes)}</dd>
       </div>
       <div>
-        <dt>Start</dt>
+        <dt>${escapeHtml(t("summary.start"))}</dt>
         <dd>${safeStartLabel}</dd>
       </div>
       <div>
-        <dt>Finish</dt>
+        <dt>${escapeHtml(t("summary.finish"))}</dt>
         <dd>${safeEndLabel}</dd>
       </div>
       ${nearestStationMarkup}
       ${pickupMarkup}
       ${initialWalkingMarkup}
       <div>
-        <dt>Buffer after route</dt>
+        <dt>${escapeHtml(t("summary.bufferAfterRoute"))}</dt>
         <dd>${formatMinutes(plan.remainingBufferMinutes)}</dd>
       </div>
       <div>
-        <dt>Start bonus points</dt>
+        <dt>${escapeHtml(t("summary.startBonusPoints"))}</dt>
         <dd>${plan.totalStartBonus}</dd>
       </div>
       <div>
-        <dt>Finish bonus points</dt>
+        <dt>${escapeHtml(t("summary.finishBonusPoints"))}</dt>
         <dd>${plan.totalFinishBonus}</dd>
       </div>
       <div>
-        <dt>Live bonus-ready starts</dt>
+        <dt>${escapeHtml(t("summary.liveBonusReadyStarts"))}</dt>
         <dd>${occupiedNow}</dd>
       </div>
       <div>
-        <dt>Live bonus-ready finishes</dt>
+        <dt>${escapeHtml(t("summary.liveBonusReadyFinishes"))}</dt>
         <dd>${emptyAfterDock}</dd>
       </div>
     </dl>
@@ -809,11 +1074,14 @@ function renderPlan(plan) {
     const item = document.createElement("li");
     item.className = "route-item";
     const isWalk = step.type === "walk";
-    const pointsText = isWalk ? "Walk leg" : `+${step.points} pts`;
-    const metaLabel = isWalk ? "Walking estimate" : "Travel estimate";
+    const pointsText = isWalk ? t("route.walkLeg") : `+${step.points} ${t("units.points")}`;
+    const metaLabel = isWalk ? t("route.walkingEstimate") : t("route.travelEstimate");
     const bonusText = isWalk
-      ? "manual transfer · 0 pts"
-      : `start +${step.startBonus} · finish +${step.finishBonus}`;
+      ? t("route.manualTransfer")
+      : t("route.bonusText", {
+          finishBonus: step.finishBonus,
+          startBonus: step.startBonus,
+        });
     item.innerHTML = `
       <div class="route-item__top">
         <div>
@@ -828,11 +1096,11 @@ function renderPlan(plan) {
           <strong>${formatMinutes(step.travelMinutes)}</strong>
         </div>
         <div>
-          <span>Distance</span>
-          <strong>${step.distanceKm.toFixed(1)} km</strong>
+          <span>${escapeHtml(t("route.distance"))}</span>
+          <strong>${step.distanceKm.toFixed(1)} ${t("units.kilometer")}</strong>
         </div>
         <div>
-          <span>${isWalk ? "Leg type" : "Bonus split"}</span>
+          <span>${escapeHtml(isWalk ? t("route.legType") : t("route.bonusSplit"))}</span>
           <strong>${bonusText}</strong>
         </div>
       </div>
@@ -1091,7 +1359,10 @@ function renderStationLink(station) {
 }
 
 function renderStepTitle(step) {
-  const prefix = step.type === "walk" ? '<span class="route-item__prefix">Walk:</span> ' : "";
+  const prefix =
+    step.type === "walk"
+      ? `<span class="route-item__prefix">${escapeHtml(t("route.walkPrefix"))}</span> `
+      : "";
   return `${prefix}${renderStationLink(step.from)} <span class="route-item__arrow">→</span> ${renderStationLink(step.to)}`;
 }
 
@@ -1174,8 +1445,8 @@ function drawNetwork() {
   projectionLabel.setAttribute("font-family", "IBM Plex Mono, monospace");
   projectionLabel.setAttribute("font-size", "14");
   projectionLabel.textContent = state.plan
-    ? "Zoomed to the planned route corridor · north is up"
-    : "Projected station layout · north is up";
+    ? t("network.zoomedLabel")
+    : t("network.projectedLabel");
   svg.appendChild(projectionLabel);
 
   if (state.plan?.route?.length) {
@@ -1257,7 +1528,7 @@ function drawNetwork() {
       label.setAttribute("fill", "rgba(37, 99, 235, 0.92)");
       label.setAttribute("font-family", "IBM Plex Mono, monospace");
       label.setAttribute("font-size", "12");
-      label.textContent = "You";
+      label.textContent = t("network.you");
       svg.appendChild(label);
     }
   }
@@ -1377,7 +1648,7 @@ async function runPlanner() {
   const endStation = getSelectedStation(elements.endInput);
 
   if (!startStation || !endStation) {
-    showToast("Choose both the start and finish station from the dropdowns.", "error");
+    showToast(t("errors.chooseBothStations"), "error");
     return;
   }
 
@@ -1398,14 +1669,19 @@ async function runPlanner() {
 
     if (!plan) {
       renderPlan(null);
-      showToast("No feasible path was found before the chosen finish time.", "error");
+      showToast(t("toasts.noFeasiblePath"), "error");
       return;
     }
 
     renderPlan(plan);
-    showToast(`Best route found: ${plan.points} points across ${plan.rides} rides.`);
+    showToast(
+      t("toasts.bestRouteFound", {
+        points: plan.points,
+        rides: plan.rides,
+      })
+    );
   } catch (error) {
-    showToast(error.message, "error");
+    showToast(getErrorMessage(error), "error");
   }
 }
 
@@ -1422,9 +1698,14 @@ elements.currentLocationButton.addEventListener("click", () => {
 elements.startInput.addEventListener("change", () => {
   handleStartSelectionChange().catch(() => null);
 });
+elements.languageSelect.addEventListener("change", event => {
+  state.language = event.target.value;
+  applyLanguage({ persist: true });
+  renderRoute();
+});
 elements.planButton.addEventListener("click", () => {
   runPlanner().catch(error => {
-    showToast(error.message, "error");
+    showToast(getErrorMessage(error), "error");
   });
 });
 
@@ -1441,6 +1722,8 @@ if (isLocalDevelopmentHost()) {
   elements.demoButton.hidden = false;
 }
 
+initializeLanguagePicker();
+applyLanguage();
 attachRouteLinkHandlers();
 renderRoute();
 initializeFinishTimeInput();
@@ -1456,6 +1739,3 @@ hydrateSavedCredentials()
       setUser(null);
     });
   });
-
-renderSnapshotMeta();
-renderPlan(null);
