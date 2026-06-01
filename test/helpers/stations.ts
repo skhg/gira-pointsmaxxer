@@ -1,4 +1,6 @@
-export function buildStation(overrides = {}) {
+import type { Station } from "../../src/types.js";
+
+export function buildStation(overrides: Partial<Station> = {}): Station {
   const code = String(overrides.code || "100");
   return {
     assetStatus: "active",
@@ -15,7 +17,7 @@ export function buildStation(overrides = {}) {
   };
 }
 
-export function decorateStations(stations) {
+export function decorateStations<T extends Partial<Station>>(stations: T[]) {
   return stations.map(station => ({
     displayCode: station.displayCode || String(station.code),
     label: station.label || `${station.code} - ${station.name || `Station ${station.code}`}`,

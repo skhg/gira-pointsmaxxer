@@ -8,8 +8,10 @@ import {
   finishBonusRatioAfterDock,
   occupiedRatioNow,
 } from "../src/lib/planner.js";
+import { PLANNER_ERROR_CODES } from "../src/lib/planner-errors.js";
 import { demoStations } from "../testing/fixtures/demo-stations.js";
-import { buildStation, decorateStations } from "./helpers/stations.mjs";
+import { buildStation, decorateStations } from "./helpers/stations.js";
+import type { AppError } from "../src/types.js";
 
 test("station bonus helpers classify occupied, empty, and neutral stations", () => {
   const occupied = buildStation({ bikes: 8, docks: 10 });
@@ -203,7 +205,7 @@ test("planner rejects invalid station codes", () => {
         startCode: "missing",
         stations,
       }),
-    /Pick both a valid start and finish station/u
+    error => (error as AppError | undefined)?.code === PLANNER_ERROR_CODES.INVALID_STATION_SELECTION
   );
 });
 
@@ -226,7 +228,7 @@ test("planner rejects invalid numeric inputs and sub-resolution budgets", () => 
         startCode: "A",
         stations,
       }),
-    /must all be positive/u
+    error => (error as AppError | undefined)?.code === PLANNER_ERROR_CODES.INVALID_INPUTS
   );
 
   assert.throws(
@@ -242,7 +244,7 @@ test("planner rejects invalid numeric inputs and sub-resolution budgets", () => 
         startCode: "A",
         stations,
       }),
-    /Not enough time remains/u
+    error => (error as AppError | undefined)?.code === PLANNER_ERROR_CODES.INSUFFICIENT_BUDGET
   );
 });
 

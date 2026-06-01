@@ -2,6 +2,8 @@
 
 Local-first Gira planner for maximizing score before a chosen finish time.
 
+The app is now written in TypeScript across the browser app, shared libraries, server, and automated tests.
+
 It uses:
 
 - the same Gira authentication flow used by `mGira` and `Gira+`
@@ -14,8 +16,11 @@ It uses:
 Install dependencies:
 
 ```bash
+nvm use
 npm install
 ```
+
+This repo now targets Node `22` by default via [.nvmrc](/Users/een2cok/workspace/gira%20grand%20prix/.nvmrc) and the `engines` field in [package.json](/Users/een2cok/workspace/gira%20grand%20prix/package.json).
 
 Build the web bundle and serve the local app on `http://localhost:8787`:
 
@@ -34,12 +39,15 @@ The Vite dev server runs on `http://localhost:5173` and proxies `/api/*` to the 
 
 ## Project layout
 
-- `src/`: production browser code and shared planner logic
-- `server.mjs`: production Node server and API entrypoint
+- `src/`: production browser code and shared planner/runtime logic
+- `src/lib/`: shared pure modules for planner, station normalization, routes, finish-time logic, and map projection
+- `src/ui/`: browser-side rendering/controllers for larger UI sections such as credits and the network map
+- `server/`: server-side modules for HTTP helpers, Gira upstream access, config, and static serving
+- `server.ts`: production Node server and API entrypoint/composition layer
 - `test/`: automated unit, server, and browser smoke tests
 - `testing/fixtures/`: non-production fixtures used for local demos and tests
 
-The bundled demo stations now live in [testing/fixtures/demo-stations.js](/Users/een2cok/workspace/gira%20grand%20prix/testing/fixtures/demo-stations.js) instead of inside the UI file, so the application code and test/demo data stay clearly separated.
+The bundled demo stations now live in [testing/fixtures/demo-stations.ts](/Users/een2cok/workspace/gira%20grand%20prix/testing/fixtures/demo-stations.ts) instead of inside the UI file, so the application code and test/demo data stay clearly separated.
 
 ## Test coverage
 
@@ -47,6 +55,7 @@ Run the automated checks with:
 
 ```bash
 npm run lint
+npm run typecheck
 npm test
 npm run audit:high
 ```
@@ -61,8 +70,8 @@ npm run test:browser
 
 Current automated coverage focuses on:
 
-- planner scoring and route-selection logic in [src/lib/planner.js](/Users/een2cok/workspace/gira%20grand%20prix/src/lib/planner.js)
-- auth cookie/session recovery and login rate limiting in [server.mjs](/Users/een2cok/workspace/gira%20grand%20prix/server.mjs)
+- planner scoring and route-selection logic in [src/lib/planner.ts](/Users/een2cok/workspace/gira%20grand%20prix/src/lib/planner.ts)
+- auth cookie/session recovery and login rate limiting in [server.ts](/Users/een2cok/workspace/gira%20grand%20prix/server.ts)
 - a built-app browser smoke flow that loads the demo snapshot and produces a route end to end
 
 The browser smoke test uses local Google Chrome via `playwright-core`, and the server tests call the app handler directly so they do not need live Gira credentials or network access.

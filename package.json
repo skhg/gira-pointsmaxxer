@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
   "type": "module",
   "scripts": {
     "audit:high": "npm audit --audit-level=high",
@@ -10,18 +13,23 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npm run build && node --test test/*.test.mjs",
-    "test:browser": "npm run build && node --test test/browser-smoke.test.mjs",
-    "test:server": "node --test test/server.test.mjs",
-    "test:unit": "node --test test/planner.test.mjs",
-    "serve": "node server.mjs",
-    "start": "npm run build && node server.mjs"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run build && node --import tsx --test --test-force-exit test/*.test.ts",
+    "test:browser": "npm run typecheck && npm run build && node --import tsx --test --test-force-exit test/browser-smoke.test.ts",
+    "test:server": "npm run typecheck && node --import tsx --test test/server.test.ts",
+    "test:unit": "npm run typecheck && node --import tsx --test test/finish-time.test.ts test/i18n.test.ts test/planner.test.ts test/stations.test.ts",
+    "serve": "node --import tsx server.ts",
+    "start": "npm run build && node --import tsx server.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@types/node": "25.9.1",
     "eslint": "10.4.1",
     "globals": "17.6.0",
     "playwright-core": "1.60.0",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.60.0",
     "vite": "8.0.16"
   }
 }

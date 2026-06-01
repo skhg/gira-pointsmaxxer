@@ -1,5 +1,15 @@
+import type { CreditsLinkPart } from "./types.js";
+
 const LANGUAGE_STORAGE_KEY = "gira-pointsmaxxer-language-v1";
 const DEFAULT_LANGUAGE = "en";
+
+function creditsLink(label: string, url: string): CreditsLinkPart {
+  return {
+    label,
+    type: "link",
+    url,
+  };
+}
 
 export const SUPPORTED_LANGUAGES = [
   {
@@ -155,15 +165,32 @@ const translations = {
         },
         {
           title: "What is Gira?",
-          paragraphsHtml: [
-            "Gira is Lisbon's public bike-sharing system. If you want the official service, maps, and account information, visit the <a href=\"https://www.gira-bicicletasdelisboa.pt/\" target=\"_blank\" rel=\"noopener noreferrer\">official Gira website</a>.",
+          richParagraphs: [
+            [
+              "Gira is Lisbon's public bike-sharing system. If you want the official service, maps, and account information, visit the ",
+              creditsLink("official Gira website", "https://www.gira-bicicletasdelisboa.pt/"),
+              ".",
+            ],
           ],
         },
         {
           title: "Credits & inspiration",
-          paragraphsHtml: [
-            "Codex used <a href=\"https://github.com/rt-evil-inc/gira-mais\" target=\"_blank\" rel=\"noopener noreferrer\">gira-mais</a> and <a href=\"https://github.com/afonsosousah/mgira\" target=\"_blank\" rel=\"noopener noreferrer\">mGira</a> as references during development, and the work of those projects helped inspire this app.",
-            "This app was also inspired by the <a href=\"https://semanadabicicleta.pt/#event-gira\" target=\"_blank\" rel=\"noopener noreferrer\">Gira Grand Prix organised as part of Semana da Bicicleta 2026</a>.",
+          richParagraphs: [
+            [
+              "Codex used ",
+              creditsLink("gira-mais", "https://github.com/rt-evil-inc/gira-mais"),
+              " and ",
+              creditsLink("mGira", "https://github.com/afonsosousah/mgira"),
+              " as references during development, and the work of those projects helped inspire this app.",
+            ],
+            [
+              "This app was also inspired by the ",
+              creditsLink(
+                "Gira Grand Prix organised as part of Semana da Bicicleta 2026",
+                "https://semanadabicicleta.pt/#event-gira"
+              ),
+              ".",
+            ],
           ],
         },
         {
@@ -192,8 +219,12 @@ const translations = {
         },
         {
           title: "Hosting",
-          paragraphsHtml: [
-            "This app is hosted for free on <a href=\"https://render.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Render</a>, and the current deployment is hosted in the EU.",
+          richParagraphs: [
+            [
+              "This app is hosted for free on ",
+              creditsLink("Render", "https://render.com/"),
+              ", and the current deployment is hosted in the EU.",
+            ],
           ],
         },
         {
@@ -217,6 +248,12 @@ const translations = {
       auth_rate_limited:
         "The Gira authentication service is temporarily rate limiting requests.",
       invalid_credentials: "The Gira email or password was not accepted.",
+      invalid_planner_inputs:
+        "The speed, detour factor, and remaining time must all be positive.",
+      invalid_station_selection: "Pick both a valid start and finish station.",
+      insufficient_planner_budget: "Not enough time remains for the current planner resolution.",
+      no_bikes_available_at_start:
+        "The selected start station has no bikes, and no other active station currently has an available bike.",
       public_station_catalog_unavailable: "The EMEL public station catalog is unavailable.",
       live_station_snapshot_unavailable:
         "The Gira live station API did not return a usable snapshot.",
@@ -384,15 +421,32 @@ const translations = {
         },
         {
           title: "O que é a Gira?",
-          paragraphsHtml: [
-            "A Gira é o sistema público de bicicletas partilhadas de Lisboa. Se procuras o serviço oficial, os mapas e a informação da tua conta, visita o <a href=\"https://www.gira-bicicletasdelisboa.pt/\" target=\"_blank\" rel=\"noopener noreferrer\">site oficial da Gira</a>.",
+          richParagraphs: [
+            [
+              "A Gira é o sistema público de bicicletas partilhadas de Lisboa. Se procuras o serviço oficial, os mapas e a informação da tua conta, visita o ",
+              creditsLink("site oficial da Gira", "https://www.gira-bicicletasdelisboa.pt/"),
+              ".",
+            ],
           ],
         },
         {
           title: "Créditos e inspiração",
-          paragraphsHtml: [
-            "O Codex usou <a href=\"https://github.com/rt-evil-inc/gira-mais\" target=\"_blank\" rel=\"noopener noreferrer\">gira-mais</a> e <a href=\"https://github.com/afonsosousah/mgira\" target=\"_blank\" rel=\"noopener noreferrer\">mGira</a> como referências durante o desenvolvimento, e o trabalho desses projetos ajudou a inspirar esta app.",
-            "Esta app também foi inspirada pelo <a href=\"https://semanadabicicleta.pt/#event-gira\" target=\"_blank\" rel=\"noopener noreferrer\">Gira Grand Prix organizado no âmbito da Semana da Bicicleta 2026</a>.",
+          richParagraphs: [
+            [
+              "O Codex usou ",
+              creditsLink("gira-mais", "https://github.com/rt-evil-inc/gira-mais"),
+              " e ",
+              creditsLink("mGira", "https://github.com/afonsosousah/mgira"),
+              " como referências durante o desenvolvimento, e o trabalho desses projetos ajudou a inspirar esta app.",
+            ],
+            [
+              "Esta app também foi inspirada pelo ",
+              creditsLink(
+                "Gira Grand Prix organizado no âmbito da Semana da Bicicleta 2026",
+                "https://semanadabicicleta.pt/#event-gira"
+              ),
+              ".",
+            ],
           ],
         },
         {
@@ -421,8 +475,12 @@ const translations = {
         },
         {
           title: "Alojamento",
-          paragraphsHtml: [
-            "Esta app está alojada gratuitamente na <a href=\"https://render.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Render</a>, e a implementação atual está alojada na UE.",
+          richParagraphs: [
+            [
+              "Esta app está alojada gratuitamente na ",
+              creditsLink("Render", "https://render.com/"),
+              ", e a implementação atual está alojada na UE.",
+            ],
           ],
         },
         {
@@ -446,6 +504,13 @@ const translations = {
       auth_rate_limited:
         "O serviço de autenticação da Gira está temporariamente a limitar pedidos.",
       invalid_credentials: "O email ou a palavra-passe da Gira não foram aceites.",
+      invalid_planner_inputs:
+        "A velocidade, o fator de desvio e o tempo restante têm de ser positivos.",
+      invalid_station_selection: "Escolhe uma estação de partida e uma de chegada válidas.",
+      insufficient_planner_budget:
+        "Já não resta tempo suficiente para a resolução atual do planeador.",
+      no_bikes_available_at_start:
+        "A estação de partida escolhida não tem bicicletas e nenhuma outra estação ativa tem bicicletas disponíveis neste momento.",
       public_station_catalog_unavailable:
         "O catálogo público de estações da EMEL não está disponível.",
       live_station_snapshot_unavailable:

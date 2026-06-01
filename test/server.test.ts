@@ -1,18 +1,22 @@
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
   cookieHeaderFromSetCookies,
   getSetCookies,
   pickCookie,
-} from "./helpers/app-server.mjs";
-import { invokeHandler } from "./helpers/http-invoke.mjs";
-import { createAppServer } from "../server.mjs";
+} from "./helpers/app-server.js";
+import { invokeHandler } from "./helpers/http-invoke.js";
+import { createAppServer } from "../server.js";
+import type { Station } from "../src/types.js";
 
 const SESSION_COOKIE = "gira_planner_session";
 const REFRESH_COOKIE = "gira_planner_refresh";
 
-function createAuthStubs(options = {}) {
+function createAuthStubs(options: { stations?: Station[] } = {}) {
   const calls = {
     login: 0,
     refresh: 0,
@@ -43,6 +47,23 @@ function createAuthStubs(options = {}) {
       session.expiration = 222;
       return session;
     },
+  };
+}
+
+async function createTemporaryStaticFixture() {
+  const root = await mkdtemp(path.join(os.tmpdir(), "gira-pointsmaxxer-static-"));
+  const distDir = path.join(root, "dist");
+  const sourceDir = path.join(root, "src");
+
+  await mkdir(distDir, { recursive: true });
+  await mkdir(sourceDir, { recursive: true });
+  await writeFile(path.join(distDir, "index.html"), "<!doctype html><title>fixture</title>");
+  await writeFile(path.join(sourceDir, "app.css"), "body { color: tomato; }\n");
+
+  return {
+    cleanup: () => rm(root, { force: true, recursive: true }),
+    distDir,
+    sourceDir,
   };
 }
 
@@ -244,5 +265,47 @@ test("stations endpoint clears auth cookies after an invalid refresh cookie", as
     );
   } finally {
     await server.close().catch(() => null);
+  }
+});
+
+test("static server falls back to the SPA entry for app routes", async () => {
+  const fixture = await createTemporaryStaticFixture();
+  const server = createAppServer({
+    sourceDirectory: fixture.sourceDir,
+    staticDirectories: [fixture.distDir],
+  });
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      url: "/credits",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.match(await response.text(), /<title>fixture<\/title>/u);
+  } finally {
+    await server.close().catch(() => null);
+    await fixture.cleanup().catch(() => null);
+  }
+});
+
+test("static server can still serve legacy /src assets when an old HTML shell is cached", async () => {
+  const fixture = await createTemporaryStaticFixture();
+  const server = createAppServer({
+    sourceDirectory: fixture.sourceDir,
+    staticDirectories: [fixture.distDir],
+  });
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      url: "/src/app.css",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/css; charset=utf-8");
+    assert.match(await response.text(), /color: tomato/u);
+  } finally {
+    await server.close().catch(() => null);
+    await fixture.cleanup().catch(() => null);
   }
 });

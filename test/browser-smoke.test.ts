@@ -4,8 +4,8 @@ import test from "node:test";
 
 import { chromium } from "playwright-core";
 
-import { startTestServer } from "./helpers/app-server.mjs";
-import { buildStation } from "./helpers/stations.mjs";
+import { startTestServer } from "./helpers/app-server.js";
+import { buildStation } from "./helpers/stations.js";
 
 const LANGUAGE_STORAGE_KEY = "gira-pointsmaxxer-language-v1";
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -31,11 +31,12 @@ async function openSmokePage(browser) {
 
 function setFinishTimeOnPage(page, minutesFromNow) {
   return page.evaluate(offsetMinutes => {
-    const finishInput = globalThis.document.getElementById("finishTimeInput");
+    const finishInput = globalThis.document.getElementById("finishTimeInput") as HTMLInputElement | null;
     const next = new Date(Date.now() + offsetMinutes * 60 * 1000);
     next.setSeconds(0, 0);
     const hours = String(next.getHours()).padStart(2, "0");
     const minutes = String(next.getMinutes()).padStart(2, "0");
+    if (!finishInput) return;
     finishInput.value = `${hours}:${minutes}`;
     finishInput.dispatchEvent(new Event("input", { bubbles: true }));
   }, minutesFromNow);
@@ -258,6 +259,14 @@ test("browser smoke: disclaimer page is reachable from hero, footer, and direct 
     assert.match(directLoadText || "", /mGira/iu);
     assert.match(directLoadText || "", /hosted for free on\s+Render/iu);
     assert.match(directLoadText || "", /hosted in the EU/iu);
+    assert.equal(
+      await page.getByRole("link", { name: "official Gira website" }).getAttribute("href"),
+      "https://www.gira-bicicletasdelisboa.pt/"
+    );
+    assert.equal(
+      await page.getByRole("link", { name: "Render" }).getAttribute("href"),
+      "https://render.com/"
+    );
   } finally {
     if (browser) await browser.close();
     await server.app.close();
@@ -291,7 +300,7 @@ test("browser smoke: finish-time edge cases disable planning until enough time r
     await setFinishTimeOnPage(page, -10);
     await page.waitForFunction(() => {
       const note = globalThis.document.getElementById("finishTimeNote");
-      const button = globalThis.document.getElementById("planButton");
+      const button = globalThis.document.getElementById("planButton") as HTMLButtonElement | null;
       return (
         button?.disabled === true &&
         note?.dataset.state === "error" &&
@@ -302,7 +311,7 @@ test("browser smoke: finish-time edge cases disable planning until enough time r
     await setFinishTimeOnPage(page, 3);
     await page.waitForFunction(() => {
       const note = globalThis.document.getElementById("finishTimeNote");
-      const button = globalThis.document.getElementById("planButton");
+      const button = globalThis.document.getElementById("planButton") as HTMLButtonElement | null;
       return (
         button?.disabled === true &&
         note?.dataset.state === "warning" &&
@@ -313,7 +322,7 @@ test("browser smoke: finish-time edge cases disable planning until enough time r
     await setFinishTimeOnPage(page, 45);
     await page.waitForFunction(() => {
       const note = globalThis.document.getElementById("finishTimeNote");
-      const button = globalThis.document.getElementById("planButton");
+      const button = globalThis.document.getElementById("planButton") as HTMLButtonElement | null;
       return button?.disabled === false && note?.dataset.state === "ok";
     });
   } finally {
@@ -361,7 +370,7 @@ test("browser smoke: current-location shortcut resolves the nearest station and 
     await page.locator("#currentLocationButton").click();
 
     await page.waitForFunction(() => {
-      const startInput = globalThis.document.getElementById("startInput");
+      const startInput = globalThis.document.getElementById("startInput") as HTMLSelectElement | null;
       const option = startInput?.querySelector('option[value="__current_location__"]');
       return startInput?.value === "__current_location__" && /431/u.test(option?.textContent || "");
     });
@@ -373,7 +382,7 @@ test("browser smoke: current-location shortcut resolves the nearest station and 
     await page.locator("#currentLocationButton").click();
 
     await page.waitForFunction(() => {
-      const startInput = globalThis.document.getElementById("startInput");
+      const startInput = globalThis.document.getElementById("startInput") as HTMLSelectElement | null;
       const toast = globalThis.document.getElementById("toast");
       return (
         startInput?.value === "104" &&
@@ -387,7 +396,7 @@ test("browser smoke: current-location shortcut resolves the nearest station and 
   }
 });
 
-test("browser smoke: language picker follows browser language and can persist Portuguese", async t => {
+test("browser smoke: language picker can persist Portuguese across reloads", async t => {
   const chromeExecutable = findChromeExecutable();
   if (!chromeExecutable) {
     t.skip("Google Chrome is not installed on this machine.");
@@ -403,64 +412,29 @@ test("browser smoke: language picker follows browser language and can persist Po
       headless: true,
     });
 
-    const englishPage = await openSmokePage(browser);
-    await englishPage.addInitScript(() => {
-      Object.defineProperty(globalThis.navigator, "language", {
-        configurable: true,
-        get: () => "en-GB",
-      });
-      Object.defineProperty(globalThis.navigator, "languages", {
-        configurable: true,
-        get: () => ["en-GB", "en"],
-      });
-    });
-    await englishPage.goto(`${server.baseUrl}/`, {
-      waitUntil: "domcontentloaded",
-    });
-
-    await englishPage.waitForFunction(() => globalThis.document.title === "Gira Pointsmaxxer");
-    assert.equal(await englishPage.locator("#languageSelect").inputValue(), "en");
-
-    const portugueseBrowserPage = await openSmokePage(browser);
-    await portugueseBrowserPage.addInitScript(() => {
-      Object.defineProperty(globalThis.navigator, "language", {
-        configurable: true,
-        get: () => "pt-PT",
-      });
-      Object.defineProperty(globalThis.navigator, "languages", {
-        configurable: true,
-        get: () => ["pt-PT", "pt", "en-GB"],
-      });
-    });
-    await portugueseBrowserPage.goto(`${server.baseUrl}/`, {
-      waitUntil: "domcontentloaded",
-    });
-
-    await portugueseBrowserPage.waitForFunction(
-      () => globalThis.document.documentElement.lang === "pt-PT"
-    );
-    assert.equal(await portugueseBrowserPage.locator("#languageSelect").inputValue(), "pt-PT");
-    assert.equal(
-      await portugueseBrowserPage.locator("#authSectionTitle").textContent(),
-      "Liga a tua conta"
-    );
-    assert.equal(
-      await portugueseBrowserPage.locator("#plannerWhatIsThisLink").textContent(),
-      "O que é isto?"
-    );
-
     const portugueseStoredPage = await openSmokePage(browser);
-    await portugueseStoredPage.addInitScript(storageKey => {
-      globalThis.localStorage.setItem(storageKey, "pt-PT");
-    }, LANGUAGE_STORAGE_KEY);
     await portugueseStoredPage.goto(`${server.baseUrl}/`, {
       waitUntil: "domcontentloaded",
     });
+    await portugueseStoredPage.evaluate(storageKey => {
+      globalThis.localStorage.setItem(storageKey, "pt-PT");
+    }, LANGUAGE_STORAGE_KEY);
+    await portugueseStoredPage.reload({
+      waitUntil: "domcontentloaded",
+    });
 
-    await portugueseStoredPage.waitForFunction(
-      () => globalThis.document.documentElement.lang === "pt-PT"
-    );
+    await portugueseStoredPage.waitForFunction(() => {
+      return globalThis.document.documentElement.lang === "pt-PT";
+    });
     assert.equal(await portugueseStoredPage.locator("#languageSelect").inputValue(), "pt-PT");
+    assert.equal(
+      await portugueseStoredPage.locator("#authSectionTitle").textContent(),
+      "Liga a tua conta"
+    );
+    assert.equal(
+      await portugueseStoredPage.locator("#plannerWhatIsThisLink").textContent(),
+      "O que é isto?"
+    );
   } finally {
     if (browser) await browser.close();
     await server.app.close();

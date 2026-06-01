@@ -1,3 +1,11 @@
+import type {
+  AppError,
+  LiveSnapshotResponse,
+  SavedCredentials,
+  SessionSummaryResponse,
+  UserSummary,
+} from "./types.js";
+
 const CREDENTIALS_STORAGE_KEY = "gira-pointsmaxxer-credentials-v1";
 const LEGACY_CREDENTIALS_STORAGE_KEYS = ["gira-grand-prix-credentials-v1"];
 
@@ -5,35 +13,40 @@ function getWebStorage() {
   return typeof localStorage !== "undefined" ? localStorage : null;
 }
 
-function createError(message, status, code) {
-  const error = new Error(String(message || ""));
+function createError(message: unknown, status: number, code: string) {
+  const error = new Error(String(message || "")) as AppError;
   error.code = code || "genericRequest";
   error.status = status;
   return error;
 }
 
-async function webApi(path, options = {}) {
+function toPlainHeaders(headers?: HeadersInit) {
+  if (!headers) return {};
+  return Object.fromEntries(new Headers(headers).entries());
+}
+
+async function webApi<TResponse>(path: string, options: RequestInit = {}): Promise<TResponse> {
   let response;
 
   try {
     response = await fetch(path, {
+      ...options,
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers || {}),
+        ...toPlainHeaders(options.headers),
       },
-      ...options,
     });
   } catch (error) {
-    throw createError(error?.message, 0, "genericRequest");
+    throw createError((error as Error | undefined)?.message, 0, "genericRequest");
   }
 
-  const data = await response.json().catch(() => ({}));
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
   if (!response.ok) {
-    throw createError(data.error, response.status, data.code || "genericServer");
+    throw createError(data.error, response.status, String(data.code || "genericServer"));
   }
 
-  return data;
+  return data as TResponse;
 }
 
 async function getStoredValue(key) {
@@ -65,7 +78,7 @@ export async function loadSavedCredentials() {
   if (!value) return null;
 
   try {
-    const credentials = JSON.parse(value);
+    const credentials = JSON.parse(value) as Partial<SavedCredentials> & { password?: string };
     const email = String(credentials?.email || "").trim();
     if (!email) {
       await clearSavedCredentials();
@@ -81,7 +94,7 @@ export async function loadSavedCredentials() {
       );
     }
 
-    return { email };
+    return { email } satisfies SavedCredentials;
   } catch {
     await clearSavedCredentials();
     return null;
@@ -108,22 +121,23 @@ export async function clearSavedCredentials() {
 }
 
 export async function getSessionSummary() {
-  return webApi("/api/session");
+  return webApi<SessionSummaryResponse>("/api/session");
 }
 
 export async function loginWithGira(email, password) {
-  return webApi("/api/login", {
+  return webApi<SessionSummaryResponse & { user: UserSummary }>("/api/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
 export async function logoutFromGira() {
-  return webApi("/api/logout", { method: "POST" }).catch(() => ({
+  return webApi<SessionSummaryResponse>("/api/logout", { method: "POST" }).catch(() => ({
     authenticated: false,
+    user: null,
   }));
 }
 
 export async function loadLiveSnapshot() {
-  return webApi("/api/stations");
+  return webApi<LiveSnapshotResponse>("/api/stations");
 }

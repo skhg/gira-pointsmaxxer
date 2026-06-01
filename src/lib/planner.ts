@@ -1,19 +1,53 @@
+import { createPlannerError, PLANNER_ERROR_CODES } from "./planner-errors.js";
+import { haversineKm } from "./stations.js";
+import type { Plan, RideStep, Station, StationLike, WalkStep } from "../types.js";
+
 export const RESOLUTION_SECONDS = 30;
 export const DEFAULT_OCCUPIED_THRESHOLD = 0.7;
 export const DEFAULT_EMPTY_THRESHOLD = 0.7;
 export const DEFAULT_WALKING_SPEED_KMH = 4.8;
 export const DEFAULT_WALKING_DETOUR_FACTOR = 1.12;
 
-export function occupiedRatioNow(station) {
+interface PlannerEdge {
+  distanceKm: number;
+  finishBonus: number;
+  fromIndex: number;
+  points: number;
+  rideMinutes: number;
+  slots: number;
+  startBonus: number;
+  toIndex: number;
+}
+
+interface PlannerCursorStep {
+  edge: PlannerEdge;
+  previousSlot: number;
+  previousStationIndex: number;
+}
+
+interface PlannerConfig {
+  budgetMinutes: number;
+  detourFactor: number;
+  endCode: string;
+  finishDeadline: Date;
+  plannedAt: Date;
+  rideOverheadMinutes: number;
+  speedKmh: number;
+  startCode: string;
+  startLocationOrigin?: StationLike | null;
+  stations: Station[];
+}
+
+export function occupiedRatioNow(station: Pick<Station, "bikes" | "docks">) {
   return station.docks > 0 ? station.bikes / station.docks : 0;
 }
 
-export function finishBonusRatioAfterDock(station) {
+export function finishBonusRatioAfterDock(station: Pick<Station, "bikes" | "docks">) {
   if (station.docks <= 0 || station.bikes >= station.docks) return -Infinity;
   return (station.docks - (station.bikes + 1)) / station.docks;
 }
 
-export function classifyStation(station) {
+export function classifyStation(station: Pick<Station, "bikes" | "docks">) {
   const canStartBonus = occupiedRatioNow(station) > DEFAULT_OCCUPIED_THRESHOLD;
   const canFinishBonus = finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD;
   if (canStartBonus) return "occupied";
@@ -21,20 +55,7 @@ export function classifyStation(station) {
   return "neutral";
 }
 
-export function haversineKm(from, to) {
-  const earthRadiusKm = 6371;
-  const lat1 = (from.latitude * Math.PI) / 180;
-  const lat2 = (to.latitude * Math.PI) / 180;
-  const deltaLat = ((to.latitude - from.latitude) * Math.PI) / 180;
-  const deltaLon = ((to.longitude - from.longitude) * Math.PI) / 180;
-
-  const a =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-export function estimateWalkLeg(from, to, detourFactor) {
+export function estimateWalkLeg(from: StationLike, to: StationLike, detourFactor: number): WalkStep {
   const distanceKm = haversineKm(from, to) * Math.max(DEFAULT_WALKING_DETOUR_FACTOR, detourFactor);
   const walkMinutes = (distanceKm / DEFAULT_WALKING_SPEED_KMH) * 60;
   const slots = Math.max(1, Math.ceil((walkMinutes * 60) / RESOLUTION_SECONDS));
@@ -52,8 +73,12 @@ export function estimateWalkLeg(from, to, detourFactor) {
   };
 }
 
-export function findNearestStation(fromPoint, stations, predicate = () => true) {
-  let nearest = null;
+export function findNearestStation<TStation extends StationLike>(
+  fromPoint: Pick<StationLike, "latitude" | "longitude">,
+  stations: TStation[],
+  predicate: (station: TStation) => boolean = () => true
+) {
+  let nearest: { distanceKm: number; station: TStation } | null = null;
 
   for (const station of stations) {
     if (!predicate(station)) continue;
@@ -70,7 +95,7 @@ export function findNearestStation(fromPoint, stations, predicate = () => true) 
   return nearest?.station || null;
 }
 
-export function findNearestAvailableBikeStation(startStation, stations) {
+export function findNearestAvailableBikeStation(startStation: Station, stations: Station[]) {
   return findNearestStation(
     startStation,
     stations,
@@ -82,7 +107,7 @@ export function findNearestAvailableBikeStation(startStation, stations) {
   );
 }
 
-export function computeOptimalPlan(config) {
+export function computeOptimalPlan(config: PlannerConfig): Plan | null {
   const {
     stations,
     startCode,
@@ -100,19 +125,28 @@ export function computeOptimalPlan(config) {
   const endIndex = stations.findIndex(station => station.code === endCode);
 
   if (startIndex === -1 || endIndex === -1) {
-    throw new Error("Pick both a valid start and finish station.");
+    throw createPlannerError(PLANNER_ERROR_CODES.INVALID_STATION_SELECTION);
   }
 
   if (speedKmh <= 0 || detourFactor < 1 || budgetMinutes <= 0) {
-    throw new Error("The speed, detour factor, and remaining time must all be positive.");
+    throw createPlannerError(PLANNER_ERROR_CODES.INVALID_INPUTS, {
+      budgetMinutes,
+      detourFactor,
+      speedKmh,
+    });
   }
 
   const maxSlots = Math.floor((budgetMinutes * 60) / RESOLUTION_SECONDS);
-  if (maxSlots <= 0) throw new Error("Not enough time remains for the current planner resolution.");
+  if (maxSlots <= 0) {
+    throw createPlannerError(PLANNER_ERROR_CODES.INSUFFICIENT_BUDGET, {
+      budgetMinutes,
+      maxSlots,
+    });
+  }
 
   const chosenStartStation = stations[startIndex];
   let rideStartIndex = startIndex;
-  const preRideSteps = [];
+  const preRideSteps: WalkStep[] = [];
 
   if (startLocationOrigin) {
     preRideSteps.push(estimateWalkLeg(startLocationOrigin, chosenStartStation, detourFactor));
@@ -121,7 +155,9 @@ export function computeOptimalPlan(config) {
   if (chosenStartStation.bikes <= 0) {
     const nearestBikeStation = findNearestAvailableBikeStation(chosenStartStation, stations);
     if (!nearestBikeStation) {
-      throw new Error("The selected start station has no bikes, and no other active station currently has an available bike.");
+      throw createPlannerError(PLANNER_ERROR_CODES.NO_BIKES_AT_START, {
+        startCode,
+      });
     }
 
     rideStartIndex = stations.findIndex(station => station.code === nearestBikeStation.code);
@@ -133,7 +169,7 @@ export function computeOptimalPlan(config) {
     return null;
   }
 
-  const edges = Array.from({ length: stations.length }, () => []);
+  const edges: PlannerEdge[][] = Array.from({ length: stations.length }, () => []);
 
   for (let fromIndex = 0; fromIndex < stations.length; fromIndex += 1) {
     const from = stations[fromIndex];
@@ -183,7 +219,7 @@ export function computeOptimalPlan(config) {
   const bestExactMinutes = Array.from({ length: maxSlots + 1 }, () =>
     Array(stations.length).fill(Number.POSITIVE_INFINITY)
   );
-  const previous = Array.from({ length: maxSlots + 1 }, () =>
+  const previous: Array<Array<PlannerCursorStep | null>> = Array.from({ length: maxSlots + 1 }, () =>
     Array(stations.length).fill(null)
   );
 
@@ -243,7 +279,7 @@ export function computeOptimalPlan(config) {
     return null;
   }
 
-  const path = [];
+  const path: PlannerEdge[] = [];
   let cursorSlot = finalSlot;
   let cursorStation = endIndex;
 
@@ -260,7 +296,7 @@ export function computeOptimalPlan(config) {
   const totalRideMinutes = path.reduce((sum, edge) => sum + edge.rideMinutes, 0);
   const totalStartBonus = path.reduce((sum, edge) => sum + edge.startBonus, 0);
   const totalFinishBonus = path.reduce((sum, edge) => sum + edge.finishBonus, 0);
-  const rideSteps = path.map((edge, index) => ({
+  const rideSteps: RideStep[] = path.map((edge, index) => ({
     distanceKm: edge.distanceKm,
     finishBonus: edge.finishBonus,
     from: stations[edge.fromIndex],
@@ -273,7 +309,7 @@ export function computeOptimalPlan(config) {
     type: "ride",
   }));
 
-  const walkingSteps = preRideSteps.map((step, index) => ({
+  const walkingSteps: WalkStep[] = preRideSteps.map((step, index) => ({
     ...step,
     sequence: index + 1,
   }));

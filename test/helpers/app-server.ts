@@ -1,8 +1,10 @@
 import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 
-import { createAppServer } from "../../server.mjs";
+import { createAppServer } from "../../server.js";
+import type { AppServerOptions } from "../../server/types.js";
 
-export async function startTestServer(options = {}) {
+export async function startTestServer(options: AppServerOptions = {}) {
   const app = createAppServer({
     host: "127.0.0.1",
     port: 0,
@@ -12,7 +14,7 @@ export async function startTestServer(options = {}) {
   app.server.listen(0, "127.0.0.1");
   await once(app.server, "listening");
 
-  const address = app.server.address();
+  const address = app.server.address() as AddressInfo;
   return {
     app,
     baseUrl: `http://127.0.0.1:${address.port}`,
