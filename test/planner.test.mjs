@@ -183,3 +183,204 @@ test("demo fixture can produce a feasible route without UI wiring", () => {
   assert.ok(plan.points > 0);
   assert.ok(plan.route.length > 0);
 });
+
+test("planner rejects invalid station codes", () => {
+  const stations = decorateStations([
+    buildStation({ code: "A" }),
+    buildStation({ code: "B" }),
+  ]);
+
+  assert.throws(
+    () =>
+      computeOptimalPlan({
+        budgetMinutes: 30,
+        detourFactor: 1.1,
+        endCode: "B",
+        finishDeadline: new Date("2026-05-30T12:00:00Z"),
+        plannedAt: new Date("2026-05-30T10:00:00Z"),
+        rideOverheadMinutes: 1,
+        speedKmh: 15,
+        startCode: "missing",
+        stations,
+      }),
+    /Pick both a valid start and finish station/u
+  );
+});
+
+test("planner rejects invalid numeric inputs and sub-resolution budgets", () => {
+  const stations = decorateStations([
+    buildStation({ code: "A" }),
+    buildStation({ code: "B", longitude: -9.139 }),
+  ]);
+
+  assert.throws(
+    () =>
+      computeOptimalPlan({
+        budgetMinutes: 20,
+        detourFactor: 0.99,
+        endCode: "B",
+        finishDeadline: new Date("2026-05-30T12:00:00Z"),
+        plannedAt: new Date("2026-05-30T10:00:00Z"),
+        rideOverheadMinutes: 1,
+        speedKmh: 15,
+        startCode: "A",
+        stations,
+      }),
+    /must all be positive/u
+  );
+
+  assert.throws(
+    () =>
+      computeOptimalPlan({
+        budgetMinutes: 0.4,
+        detourFactor: 1,
+        endCode: "B",
+        finishDeadline: new Date("2026-05-30T12:00:00Z"),
+        plannedAt: new Date("2026-05-30T10:00:00Z"),
+        rideOverheadMinutes: 0,
+        speedKmh: 15,
+        startCode: "A",
+        stations,
+      }),
+    /Not enough time remains/u
+  );
+});
+
+test("planner returns null when the finish station cannot accept a bike", () => {
+  const stations = decorateStations([
+    buildStation({
+      bikes: 8,
+      code: "A",
+      displayCode: "A",
+      docks: 10,
+      label: "A - Start bonus",
+      longitude: -9.14,
+    }),
+    buildStation({
+      bikes: 10,
+      code: "B",
+      displayCode: "B",
+      docks: 10,
+      label: "B - Full finish",
+      longitude: -9.135,
+    }),
+  ]);
+
+  const plan = computeOptimalPlan({
+    budgetMinutes: 10,
+    detourFactor: 1,
+    endCode: "B",
+    finishDeadline: new Date("2026-05-30T12:00:00Z"),
+    plannedAt: new Date("2026-05-30T10:00:00Z"),
+    rideOverheadMinutes: 0,
+    speedKmh: 20,
+    startCode: "A",
+    stations,
+  });
+
+  assert.equal(plan, null);
+});
+
+test("planner returns null when the required initial walking exceeds the time budget", () => {
+  const stations = decorateStations([
+    buildStation({
+      bikes: 6,
+      code: "A",
+      displayCode: "A",
+      label: "A - Pickup",
+      latitude: 38.72,
+      longitude: -9.14,
+    }),
+    buildStation({
+      bikes: 2,
+      code: "B",
+      displayCode: "B",
+      label: "B - Finish",
+      latitude: 38.7202,
+      longitude: -9.1398,
+    }),
+  ]);
+
+  const plan = computeOptimalPlan({
+    budgetMinutes: 5,
+    detourFactor: 1.1,
+    endCode: "B",
+    finishDeadline: new Date("2026-05-30T12:00:00Z"),
+    plannedAt: new Date("2026-05-30T10:00:00Z"),
+    rideOverheadMinutes: 0,
+    speedKmh: 15,
+    startCode: "A",
+    startLocationOrigin: {
+      code: "origin",
+      label: "Current location",
+      latitude: 38.74,
+      longitude: -9.12,
+    },
+    stations,
+  });
+
+  assert.equal(plan, null);
+});
+
+test("planner breaks equal-score ties in favor of the faster route", () => {
+  const stations = decorateStations([
+    buildStation({
+      bikes: 8,
+      code: "A",
+      displayCode: "A",
+      docks: 10,
+      label: "A - Start bonus",
+      latitude: 38.72,
+      longitude: -9.14,
+    }),
+    buildStation({
+      bikes: 5,
+      code: "B",
+      displayCode: "B",
+      docks: 10,
+      label: "B - Fast middle",
+      latitude: 38.72,
+      longitude: -9.135,
+    }),
+    buildStation({
+      bikes: 5,
+      code: "C",
+      displayCode: "C",
+      docks: 10,
+      label: "C - Slow middle",
+      latitude: 38.726,
+      longitude: -9.132,
+    }),
+    buildStation({
+      bikes: 1,
+      code: "D",
+      displayCode: "D",
+      docks: 10,
+      label: "D - Finish bonus",
+      latitude: 38.72,
+      longitude: -9.125,
+    }),
+  ]);
+
+  const plan = computeOptimalPlan({
+    budgetMinutes: 4.2,
+    detourFactor: 1,
+    endCode: "D",
+    finishDeadline: new Date("2026-05-30T12:00:00Z"),
+    plannedAt: new Date("2026-05-30T10:00:00Z"),
+    rideOverheadMinutes: 0,
+    speedKmh: 30,
+    startCode: "A",
+    stations,
+  });
+
+  assert.ok(plan);
+  assert.equal(plan.points, 220);
+  assert.deepEqual(
+    plan.route.map(step => [step.from.code, step.to.code]),
+    [
+      ["A", "B"],
+      ["B", "D"],
+    ]
+  );
+});

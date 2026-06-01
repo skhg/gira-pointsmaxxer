@@ -204,3 +204,45 @@ test("legacy Render hostname permanently redirects to the new Pointsmaxxer URL",
     await server.close().catch(() => null);
   }
 });
+
+test("stations endpoint clears auth cookies after an invalid refresh cookie", async () => {
+  const server = createAppServer({
+    refreshSession: async () => {
+      throw {
+        code: "session_expired",
+        message: "Your Gira session expired. Please sign in again.",
+        statusCode: 401,
+      };
+    },
+  });
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      headers: {
+        Cookie: `${REFRESH_COOKIE}=stale-refresh-token`,
+        "X-Forwarded-Proto": "https",
+      },
+      url: "/api/stations",
+    });
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      code: "login_required",
+      error: "You need to log in with your Gira account first.",
+    });
+
+    const clearedCookies = getSetCookies(response);
+    assert.ok(
+      clearedCookies.some(
+        cookie => cookie.startsWith(`${SESSION_COOKIE}=`) && cookie.includes("Max-Age=0")
+      )
+    );
+    assert.ok(
+      clearedCookies.some(
+        cookie => cookie.startsWith(`${REFRESH_COOKIE}=`) && cookie.includes("Max-Age=0")
+      )
+    );
+  } finally {
+    await server.close().catch(() => null);
+  }
+});
