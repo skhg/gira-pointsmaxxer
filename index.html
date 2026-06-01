@@ -3,29 +3,40 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gira Grand Prix</title>
+    <title>Gira Pointsmaxxer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/src/app.css" />
+    <link rel="stylesheet" href="./src/app.css" />
   </head>
   <body>
     <div class="shell">
-      <header class="hero">
+      <header class="hero" id="plannerHero">
         <div class="hero__copy">
           <p class="eyebrow">Lisbon Gira Route Optimizer</p>
-          <h1>Gira Grand Prix</h1>
+          <h1>Gira Pointsmaxxer</h1>
           <p class="lede">
             Maximise your points by chaining Gira rides between
             high-occupation starts and high-empty finishes.
+            <a class="hero__link" href="/credits" data-route="/credits">What is this?</a>
           </p>
         </div>
       </header>
 
-      <main class="layout">
+      <header class="hero hero--secondary" id="creditsHero" hidden>
+        <div class="hero__copy">
+          <p class="eyebrow">Disclaimer & credits</p>
+          <h1>Disclaimer & credits</h1>
+          <p class="lede">
+            What this app is, where its data comes from, and how to use it responsibly.
+          </p>
+        </div>
+      </header>
+
+      <main class="layout" id="plannerPage">
         <section class="panel panel--auth" id="authPanel">
           <div class="panel__header">
             <div>
@@ -215,9 +226,96 @@
           <ol class="route-list" id="routeList"></ol>
         </section>
       </main>
+
+      <main class="credits-page" id="creditsPage" hidden>
+        <section class="panel credits-card">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Independent project</p>
+              <h2>What to know before you use it</h2>
+            </div>
+            <a class="ghost-button credits-back-link" href="/" data-route="/">Back to planner</a>
+          </div>
+
+          <div class="credits-sections">
+            <section class="credits-section">
+              <h3>About this app</h3>
+              <p>
+                Gira Pointsmaxxer is an independent project. It is not an official app of
+                EMEL or Gira, and it has no association with them.
+              </p>
+              <p>This app was developed with Codex.</p>
+            </section>
+
+            <section class="credits-section">
+              <h3>What is Gira?</h3>
+              <p>
+                Gira is Lisbon's public bike-sharing system. If you want the official service, maps, and account information, visit the
+                <a href="https://www.gira-bicicletasdelisboa.pt/" target="_blank" rel="noopener noreferrer">official Gira website</a>.
+              </p>
+            </section>
+
+            <section class="credits-section">
+              <h3>Credits & inspiration</h3>
+              <p>
+                Codex used
+                <a href="https://github.com/rt-evil-inc/gira-mais" target="_blank" rel="noopener noreferrer">gira-mais</a>
+                and
+                <a href="https://github.com/afonsosousah/mgira" target="_blank" rel="noopener noreferrer">mGira</a>
+                as references during development, and the work of those projects helped inspire this app.
+              </p>
+              <p>
+                This app was also inspired by the
+                <a href="https://semanadabicicleta.pt/#event-gira" target="_blank" rel="noopener noreferrer">Gira Grand Prix organised as part of Semana da Bicicleta 2026</a>.
+              </p>
+            </section>
+
+            <section class="credits-section">
+              <h3>Privacy</h3>
+              <p>
+                We do not store your Gira password or other user-entered login details, and we do not intentionally record personally identifying details about how you use this app.
+              </p>
+              <p class="credits-note">
+                If you choose to sign in, the app may keep secure session state in your browser so it can stay signed in between refreshes.
+              </p>
+            </section>
+
+            <section class="credits-section">
+              <h3>Safety</h3>
+              <ul class="credits-list">
+                <li>Take reasonable precautions when cycling.</li>
+                <li>Ride safely and responsibly.</li>
+                <li>Follow the rules of the road and any local traffic guidance.</li>
+              </ul>
+            </section>
+
+            <section class="credits-section">
+              <h3>Accuracy & responsibility</h3>
+              <p>
+                The routes generated by this app may or may not be correct. Please use your own judgment, and do not rely on the app as your only source of guidance.
+              </p>
+              <p>
+                We take no responsibility for the accuracy of the information presented.
+              </p>
+              <p>
+                System-capacity and availability data come from the Gira system and may or may not be reliable.
+              </p>
+            </section>
+
+            <section class="credits-section">
+              <h3>Source</h3>
+              <p class="credits-placeholder">Source repository link coming soon.</p>
+            </section>
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer" id="appFooter">
+        <a class="app-footer__link" href="/credits" data-route="/credits">Disclaimer & credits</a>
+      </footer>
     </div>
 
     <div class="toast" id="toast" hidden></div>
-    <script src="/src/app.js" type="module"></script>
+    <script src="./src/app.js" type="module"></script>
   </body>
 </html>

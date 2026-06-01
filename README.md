@@ -1,4 +1,4 @@
-# Gira Grand Prix
+# Gira Pointsmaxxer
 
 Local-first Gira planner for maximizing score before a chosen finish time.
 

@@ -1,4 +1,5 @@
-const CREDENTIALS_STORAGE_KEY = "gira-grand-prix-credentials-v1";
+const CREDENTIALS_STORAGE_KEY = "gira-pointsmaxxer-credentials-v1";
+const LEGACY_CREDENTIALS_STORAGE_KEYS = ["gira-grand-prix-credentials-v1"];
 
 function getWebStorage() {
   return typeof localStorage !== "undefined" ? localStorage : null;
@@ -41,7 +42,19 @@ async function removeStoredValue(key) {
 }
 
 export async function loadSavedCredentials() {
-  const value = await getStoredValue(CREDENTIALS_STORAGE_KEY);
+  let value = await getStoredValue(CREDENTIALS_STORAGE_KEY);
+
+  if (!value) {
+    for (const legacyKey of LEGACY_CREDENTIALS_STORAGE_KEYS) {
+      value = await getStoredValue(legacyKey);
+      if (value) {
+        await setStoredValue(CREDENTIALS_STORAGE_KEY, value);
+        await removeStoredValue(legacyKey);
+        break;
+      }
+    }
+  }
+
   if (!value) return null;
 
   try {

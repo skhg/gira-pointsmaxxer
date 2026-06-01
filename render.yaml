@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: gira-grand-prix
+    name: gira-pointsmaxxer
     runtime: node
     plan: free
     buildCommand: npm install

@@ -806,6 +806,6 @@ if (isDirectRun()) {
   const app = createAppServer();
   app.server.listen(app.port, app.host, () => {
     const displayHost = app.host === "0.0.0.0" ? "localhost" : app.host;
-    console.log(`Gira Grand Prix is running at http://${displayHost}:${app.port}`);
+    console.log(`Gira Pointsmaxxer is running at http://${displayHost}:${app.port}`);
   });
 }

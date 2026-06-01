@@ -25,6 +25,10 @@ const MAP_TILE_MIN_ZOOM = 11;
 const MAP_TILE_URL_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const MERCATOR_MAX_LATITUDE = 85.05112878;
 const DEFAULT_CHALLENGE_MINUTES = 120;
+const PLANNER_ROUTE = "/";
+const CREDITS_ROUTE = "/credits";
+const DEFAULT_PAGE_TITLE = "Gira Pointsmaxxer";
+const CREDITS_PAGE_TITLE = "Disclaimer & Credits · Gira Pointsmaxxer";
 const CURRENT_LOCATION_VALUE = "__current_location__";
 const CURRENT_LOCATION_ORIGIN_CODE = "__current_location_origin__";
 const CURRENT_LOCATION_CACHE_MS = 1000 * 60 * 2;
@@ -34,6 +38,7 @@ const MINIMUM_REMAINING_MINUTES = 5;
 
 const state = {
   currentLocation: null,
+  currentRoute: PLANNER_ROUTE,
   source: null,
   fetchedAt: null,
   isResolvingCurrentLocation: false,
@@ -44,8 +49,11 @@ const state = {
 };
 
 const elements = {
+  appFooter: document.getElementById("appFooter"),
   authPanel: document.getElementById("authPanel"),
   authSummary: document.getElementById("authSummary"),
+  creditsHero: document.getElementById("creditsHero"),
+  creditsPage: document.getElementById("creditsPage"),
   currentLocationButton: document.getElementById("currentLocationButton"),
   demoButton: document.getElementById("demoButton"),
   detourInput: document.getElementById("detourInput"),
@@ -65,7 +73,10 @@ const elements = {
   planButton: document.getElementById("planButton"),
   plannerNote: document.getElementById("plannerNote"),
   pointsValue: document.getElementById("pointsValue"),
+  plannerHero: document.getElementById("plannerHero"),
   ridesValue: document.getElementById("ridesValue"),
+  plannerPage: document.getElementById("plannerPage"),
+  routeLinks: Array.from(document.querySelectorAll("[data-route]")),
   routeList: document.getElementById("routeList"),
   sessionStatus: document.getElementById("sessionStatus"),
   snapshotSource: document.getElementById("snapshotSource"),
@@ -126,6 +137,82 @@ function showNetworkTooltip(station, position) {
 
 function isLocalDevelopmentHost() {
   return ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname || "");
+}
+
+function normalizeAppPath(pathname = PLANNER_ROUTE) {
+  const normalized = String(pathname || PLANNER_ROUTE).replace(/\/+$/u, "") || PLANNER_ROUTE;
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function resolveAppRoute(pathname = globalThis.location?.pathname || PLANNER_ROUTE) {
+  return normalizeAppPath(pathname) === CREDITS_ROUTE ? CREDITS_ROUTE : PLANNER_ROUTE;
+}
+
+function syncCanonicalRoute() {
+  const currentPath = normalizeAppPath(globalThis.location?.pathname || PLANNER_ROUTE);
+  const canonicalRoute = resolveAppRoute(currentPath);
+
+  if (currentPath !== canonicalRoute) {
+    globalThis.history.replaceState({}, "", canonicalRoute);
+  }
+
+  state.currentRoute = canonicalRoute;
+  return canonicalRoute;
+}
+
+function updateDocumentTitle(route) {
+  document.title = route === CREDITS_ROUTE ? CREDITS_PAGE_TITLE : DEFAULT_PAGE_TITLE;
+}
+
+function renderRoute(options = {}) {
+  const { scrollTop = false } = options;
+  const route = syncCanonicalRoute();
+  const showingCredits = route === CREDITS_ROUTE;
+
+  elements.plannerHero.hidden = showingCredits;
+  elements.plannerPage.hidden = showingCredits;
+  elements.appFooter.hidden = showingCredits;
+  elements.creditsHero.hidden = !showingCredits;
+  elements.creditsPage.hidden = !showingCredits;
+
+  updateDocumentTitle(route);
+
+  if (showingCredits) {
+    hideNetworkTooltip();
+  } else {
+    globalThis.requestAnimationFrame(() => {
+      drawNetwork();
+    });
+  }
+
+  if (scrollTop) {
+    globalThis.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+  }
+}
+
+function navigateToRoute(pathname) {
+  const targetRoute = resolveAppRoute(pathname);
+  const currentRoute = resolveAppRoute(globalThis.location?.pathname || PLANNER_ROUTE);
+  if (currentRoute !== targetRoute || normalizeAppPath(globalThis.location.pathname) !== targetRoute) {
+    globalThis.history.pushState({}, "", targetRoute);
+  }
+
+  renderRoute({ scrollTop: true });
+}
+
+function attachRouteLinkHandlers() {
+  for (const link of elements.routeLinks) {
+    link.addEventListener("click", event => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      event.preventDefault();
+      navigateToRoute(link.getAttribute("href") || PLANNER_ROUTE);
+    });
+  }
 }
 
 function padTimeNumber(value) {
@@ -1009,6 +1096,10 @@ function renderStepTitle(step) {
 }
 
 function drawNetwork() {
+  if (state.currentRoute !== PLANNER_ROUTE || elements.plannerPage.hidden) {
+    return;
+  }
+
   const svg = elements.networkSvg;
   const stations = state.stations;
   const focusStations = getFocusStations();
@@ -1337,12 +1428,21 @@ elements.planButton.addEventListener("click", () => {
   });
 });
 
-window.addEventListener("resize", drawNetwork);
+window.addEventListener("resize", () => {
+  if (state.currentRoute === PLANNER_ROUTE) {
+    drawNetwork();
+  }
+});
+window.addEventListener("popstate", () => {
+  renderRoute();
+});
 
 if (isLocalDevelopmentHost()) {
   elements.demoButton.hidden = false;
 }
 
+attachRouteLinkHandlers();
+renderRoute();
 initializeFinishTimeInput();
 updatePlannerAvailability();
 setInterval(() => {
