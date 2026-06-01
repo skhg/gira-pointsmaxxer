@@ -1634,7 +1634,7 @@ async function runPlanner() {
     return;
   }
 
-  let startStation = null;
+  let startStation;
   let startLocationOrigin = null;
 
   if (elements.startInput.value === CURRENT_LOCATION_VALUE) {

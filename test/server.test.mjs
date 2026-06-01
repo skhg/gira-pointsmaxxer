@@ -49,7 +49,7 @@ function createAuthStubs(options = {}) {
 test("session can be rebuilt from the refresh-token cookie after a restart", async () => {
   const stubs = createAuthStubs();
   const firstServer = createAppServer(stubs);
-  let refreshCookie = "";
+  let refreshCookie;
 
   try {
     const loginResponse = await invokeHandler(firstServer.handler, {
