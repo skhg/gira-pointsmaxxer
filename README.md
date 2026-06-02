@@ -147,3 +147,7 @@ Defaults:
 - The localhost Node server is still useful for browser-based development.
 - A bundled demo snapshot is included for local testing and development through the separated fixture module in `testing/fixtures/`.
 - The literal scoring optimum can still be a repeatable back-and-forth loop when the same ride keeps qualifying for both bonuses.
+
+## License
+
+This project is open source under the [MIT License](/Users/een2cok/workspace/gira%20grand%20prix/LICENSE).
