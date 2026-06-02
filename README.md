@@ -2,6 +2,8 @@
 
 Local-first Gira planner for maximizing score before a chosen finish time.
 
+Live app: [gira-pointsmaxxer.onrender.com](https://gira-pointsmaxxer.onrender.com/)
+
 The app is now written in TypeScript across the browser app, shared libraries, server, and automated tests.
 
 It uses:
