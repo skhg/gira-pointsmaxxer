@@ -229,7 +229,13 @@ const translations = {
         },
         {
           title: "Source",
-          placeholder: "Source repository link coming soon.",
+          richParagraphs: [
+            [
+              "The source code for this app is available on ",
+              creditsLink("GitHub", "https://github.com/skhg/gira-pointsmaxxer"),
+              ".",
+            ],
+          ],
         },
       ],
     },
@@ -485,7 +491,13 @@ const translations = {
         },
         {
           title: "Código-fonte",
-          placeholder: "Link para o repositório em breve.",
+          richParagraphs: [
+            [
+              "O código-fonte desta app está disponível no ",
+              creditsLink("GitHub", "https://github.com/skhg/gira-pointsmaxxer"),
+              ".",
+            ],
+          ],
         },
       ],
     },

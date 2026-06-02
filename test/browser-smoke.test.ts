@@ -257,7 +257,7 @@ test("browser smoke: disclaimer page is reachable from hero, footer, and direct 
     );
 
     const directLoadText = await page.locator("#creditsPage").textContent();
-    assert.match(directLoadText || "", /Source repository link coming soon/iu);
+    assert.match(directLoadText || "", /source code for this app is available on/iu);
     assert.match(directLoadText || "", /gira-mais/iu);
     assert.match(directLoadText || "", /mGira/iu);
     assert.match(directLoadText || "", /hosted for free on\s+Render/iu);
@@ -269,6 +269,10 @@ test("browser smoke: disclaimer page is reachable from hero, footer, and direct 
     assert.equal(
       await page.getByRole("link", { name: "Render" }).getAttribute("href"),
       "https://render.com/"
+    );
+    assert.equal(
+      await page.getByRole("link", { name: "GitHub" }).getAttribute("href"),
+      "https://github.com/skhg/gira-pointsmaxxer"
     );
   } finally {
     if (browser) await browser.close();
