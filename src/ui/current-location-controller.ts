@@ -9,6 +9,7 @@ interface CurrentLocationControllerOptions {
   currentLocationValue: string;
   elements: Pick<AppElements, "currentLocationButton" | "startInput">;
   getErrorMessage: (error: unknown) => string;
+  onCurrentLocationResolved?: () => void;
   showToast: (message: string, type?: string) => void;
   state: AppState;
   translate: (key: string, values?: MessageValues) => string;
@@ -35,6 +36,7 @@ export function createCurrentLocationController({
   currentLocationValue,
   elements,
   getErrorMessage,
+  onCurrentLocationResolved,
   showToast,
   state,
   translate: t,
@@ -177,6 +179,7 @@ export function createCurrentLocationController({
           label: resolved.station.label || resolved.station.name || resolved.station.code,
         })
       );
+      onCurrentLocationResolved?.();
       return resolved;
     } catch (error) {
       if (preserveSelectionOnFailure) {

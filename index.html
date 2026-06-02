@@ -40,6 +40,14 @@
         </div>
       </header>
 
+      <header class="hero hero--secondary" id="statsHero" hidden>
+        <div class="hero__copy">
+          <p class="eyebrow" id="statsHeroEyebrow"></p>
+          <h1 id="statsHeroTitle"></h1>
+          <p class="lede" id="statsHeroLede"></p>
+        </div>
+      </header>
+
       <main class="layout" id="plannerPage">
         <section class="panel panel--auth" id="authPanel">
           <div class="panel__header">
@@ -64,6 +72,15 @@
                   type="password"
                   autocomplete="current-password"
                 />
+              </label>
+              <label class="checkbox-row" for="rememberEmailCheckbox">
+                <input
+                  id="rememberEmailCheckbox"
+                  name="rememberEmail"
+                  type="checkbox"
+                  value="true"
+                />
+                <span id="rememberEmailLabel"></span>
               </label>
               <button type="submit" class="primary-button" id="loginButton"></button>
             </form>
@@ -235,8 +252,49 @@
         </section>
       </main>
 
+      <main class="stats-page" id="statsPage" hidden>
+        <section class="panel stats-card">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow" id="statsPanelEyebrow"></p>
+              <h2 id="statsPanelTitle"></h2>
+            </div>
+            <a class="ghost-button credits-back-link" href="/" data-route="/" id="statsBackToPlannerLink"></a>
+          </div>
+
+          <p class="tiny-note stats-last-updated" id="statsLastUpdated"></p>
+
+          <div class="summary-grid stats-summary-grid" id="statsSummaryGrid"></div>
+
+          <div class="stats-sections">
+            <section class="stats-section">
+              <h3 id="statsSignedInTitle"></h3>
+              <div class="summary-breakdown" id="statsSignedInBreakdown"></div>
+            </section>
+
+            <section class="stats-section">
+              <h3 id="statsAnonymousTitle"></h3>
+              <div class="summary-breakdown" id="statsAnonymousBreakdown"></div>
+            </section>
+
+            <section class="stats-section">
+              <h3 id="statsLanguageTitle"></h3>
+              <div class="stats-language-grid" id="statsLanguageGrid"></div>
+            </section>
+
+            <section class="stats-section">
+              <h3 id="statsTopEventsTitle"></h3>
+              <ol class="route-list stats-event-list" id="statsTopEventsList"></ol>
+            </section>
+          </div>
+        </section>
+      </main>
+
       <footer class="app-footer" id="appFooter">
-        <a class="app-footer__link" href="/credits" data-route="/credits" id="footerCreditsLink"></a>
+        <div class="app-footer__links">
+          <a class="app-footer__link" href="/credits" data-route="/credits" id="footerCreditsLink"></a>
+          <a class="app-footer__link" href="/stats" data-route="/stats" id="footerStatsLink"></a>
+        </div>
       </footer>
     </div>
 

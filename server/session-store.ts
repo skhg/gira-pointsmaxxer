@@ -31,6 +31,7 @@ export function createSessionStore(options: SessionStoreOptions) {
     const timestamp = now();
     const session = {
       accessToken: tokens.accessToken,
+      analyticsAccountKey: String(user.email || "").trim() || null,
       createdAt: timestamp,
       expiration: tokens.expiration,
       expiresAt: timestamp + SESSION_TTL_MS,
@@ -90,6 +91,7 @@ export function createSessionStore(options: SessionStoreOptions) {
 
     const recoveredSession = {
       accessToken: "",
+      analyticsAccountKey: null,
       createdAt: now(),
       expiration: 0,
       expiresAt: now() + SESSION_TTL_MS,

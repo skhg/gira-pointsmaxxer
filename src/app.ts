@@ -1,5 +1,6 @@
+import { fetchAnalyticsStats, sendAnalyticsEvent } from "./analytics.js";
 import { computeOptimalPlan } from "./lib/planner.js";
-import { PLANNER_ROUTE } from "./lib/app-routes.js";
+import { CREDITS_ROUTE, PLANNER_ROUTE, STATS_ROUTE } from "./lib/app-routes.js";
 import {
   buildDefaultFinishTimeValue,
   FINISH_TIME_REFRESH_MS,
@@ -24,7 +25,8 @@ import { createCurrentLocationController } from "./ui/current-location-controlle
 import { createNetworkMapController } from "./ui/network-map.js";
 import { createPlannerResultsRenderer } from "./ui/planner-results.js";
 import { createStationPanelController } from "./ui/station-panel.js";
-import type { AppError, CreditsSection, Plan, Station } from "./types.js";
+import { createStatsRenderer } from "./ui/stats.js";
+import type { AppError, AppRoutePath, CreditsSection, Plan, Station } from "./types.js";
 
 const CURRENT_LOCATION_VALUE = "__current_location__";
 const CURRENT_LOCATION_ORIGIN_CODE = "__current_location_origin__";
@@ -38,6 +40,7 @@ const state: AppState = {
   fetchedAt: null,
   isResolvingCurrentLocation: false,
   plan: null,
+  stats: null,
   stationByCode: new Map(),
   stations: [],
   user: null,
@@ -59,6 +62,9 @@ const plannerResults = createPlannerResultsRenderer({
   elements,
   getLocale,
   getStations: () => state.stations,
+  onStationLinkOpened: () => {
+    trackEvent("google_maps_link_opened");
+  },
   translate: t,
 });
 const {
@@ -91,6 +97,12 @@ const authController = createAuthController({
   elements,
   getErrorMessage,
   isLocalDevelopmentHost,
+  onSignInSuccess: () => {
+    trackEvent("sign_in_success");
+  },
+  onStationsRefreshed: () => {
+    trackEvent("stations_refreshed");
+  },
   setStations,
   showToast,
   state,
@@ -105,7 +117,13 @@ const {
   setUser,
   syncSession,
 } = authController;
+const statsRenderer = createStatsRenderer({
+  elements,
+  getLocale,
+  translate: t,
+});
 const routeController = createAppRouteController({
+  afterRender: handleRouteRendered,
   drawNetwork,
   elements,
   hideNetworkTooltip,
@@ -123,6 +141,9 @@ const currentLocationController = createCurrentLocationController({
   currentLocationValue: CURRENT_LOCATION_VALUE,
   elements,
   getErrorMessage,
+  onCurrentLocationResolved: () => {
+    trackEvent("current_location_used");
+  },
   showToast,
   state,
   translate: t,
@@ -134,6 +155,9 @@ const {
   handleStartSelectionChange,
   resolveCurrentLocationStart,
 } = currentLocationController;
+
+let hasTrackedAppOpen = false;
+let lastTrackedRoute: AppRoutePath | null = null;
 
 function t(key, values = {}) {
   return translate(state.language, key, values);
@@ -178,6 +202,51 @@ function renderCreditsSections() {
   creditsRenderer.renderSections(getMessages(state.language).credits.sections as CreditsSection[]);
 }
 
+function renderStatsPage() {
+  statsRenderer.renderStats(state.stats);
+}
+
+function trackEvent(eventName, options: { route?: AppRoutePath } = {}) {
+  void sendAnalyticsEvent({
+    eventName,
+    language: state.language,
+    route: options.route || state.currentRoute,
+  });
+}
+
+async function loadStats() {
+  try {
+    state.stats = await fetchAnalyticsStats();
+  } catch (error) {
+    state.stats = null;
+    showToast(getErrorMessage(error), "error");
+  }
+
+  renderStatsPage();
+}
+
+function handleRouteRendered(route: AppRoutePath) {
+  if (!hasTrackedAppOpen) {
+    hasTrackedAppOpen = true;
+    trackEvent("app_open", { route });
+  }
+
+  if (lastTrackedRoute !== route) {
+    lastTrackedRoute = route;
+    trackEvent("page_view", { route });
+    if (route === CREDITS_ROUTE) {
+      trackEvent("credits_viewed", { route });
+    }
+    if (route === STATS_ROUTE) {
+      trackEvent("stats_viewed", { route });
+    }
+  }
+
+  if (route === STATS_ROUTE) {
+    void loadStats();
+  }
+}
+
 function applyStaticTranslations() {
   document.documentElement.lang = state.language;
   elements.languageLabel.textContent = t("language.label");
@@ -192,6 +261,7 @@ function applyStaticTranslations() {
   elements.authSectionTitle.textContent = t("auth.title");
   elements.emailLabel.textContent = t("auth.emailLabel");
   elements.passwordLabel.textContent = t("auth.passwordLabel");
+  elements.rememberEmailLabel.textContent = t("auth.rememberEmail");
   elements.logoutButton.textContent = t("auth.logout");
   elements.demoButton.textContent = t("auth.useDemoSnapshot");
   elements.snapshotDisclosureSummary.textContent = t("snapshot.disclosure");
@@ -229,6 +299,17 @@ function applyStaticTranslations() {
   elements.creditsPanelTitle.textContent = t("credits.panelTitle");
   elements.backToPlannerLink.textContent = t("credits.backToPlanner");
   elements.footerCreditsLink.textContent = t("credits.footerLink");
+  elements.statsHeroEyebrow.textContent = t("stats.heroEyebrow");
+  elements.statsHeroTitle.textContent = t("stats.heroTitle");
+  elements.statsHeroLede.textContent = t("stats.heroLede");
+  elements.statsPanelEyebrow.textContent = t("stats.panelEyebrow");
+  elements.statsPanelTitle.textContent = t("stats.panelTitle");
+  elements.statsBackToPlannerLink.textContent = t("stats.backToPlanner");
+  elements.statsSignedInTitle.textContent = t("stats.signedInTitle");
+  elements.statsAnonymousTitle.textContent = t("stats.anonymousTitle");
+  elements.statsLanguageTitle.textContent = t("stats.languageTitle");
+  elements.statsTopEventsTitle.textContent = t("stats.topEventsTitle");
+  elements.footerStatsLink.textContent = t("stats.footerLink");
   renderCreditsSections();
 }
 
@@ -257,6 +338,7 @@ function applyLanguage(options: { persist?: boolean } = {}) {
   renderStationOptions();
   renderSnapshotMeta();
   renderPlan(state.plan);
+  renderStatsPage();
   updatePlannerAvailability();
 }
 
@@ -334,6 +416,7 @@ async function runPlanner() {
 
   try {
     const plannedAt = new Date();
+    trackEvent("planner_run", { route: PLANNER_ROUTE });
     const plan = computeOptimalPlan({
       stations: state.stations,
       startCode: startStation.code,
@@ -379,8 +462,9 @@ elements.startInput.addEventListener("change", () => {
   handleStartSelectionChange().catch(() => null);
 });
 elements.languageSelect.addEventListener("change", event => {
-  state.language = (event.target as HTMLSelectElement).value;
+  state.language = resolveLanguage((event.target as HTMLSelectElement).value);
   applyLanguage({ persist: true });
+  trackEvent("language_selected");
   renderRoute();
 });
 elements.planButton.addEventListener("click", () => {

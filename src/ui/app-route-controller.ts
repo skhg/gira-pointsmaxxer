@@ -1,12 +1,27 @@
-import { CREDITS_ROUTE, PLANNER_ROUTE, normalizeAppPath, resolveAppRoute } from "../lib/app-routes.js";
+import {
+  CREDITS_ROUTE,
+  PLANNER_ROUTE,
+  STATS_ROUTE,
+  normalizeAppPath,
+  resolveAppRoute,
+} from "../lib/app-routes.js";
+import type { AppRoutePath } from "../types.js";
 import type { AppElements } from "./app-elements.js";
 import type { AppState } from "./app-state.js";
 
 interface AppRouteControllerOptions {
+  afterRender?: (route: AppRoutePath) => void;
   drawNetwork: () => void;
   elements: Pick<
     AppElements,
-    "appFooter" | "creditsHero" | "creditsPage" | "plannerHero" | "plannerPage" | "routeLinks"
+    | "appFooter"
+    | "creditsHero"
+    | "creditsPage"
+    | "plannerHero"
+    | "plannerPage"
+    | "routeLinks"
+    | "statsHero"
+    | "statsPage"
   >;
   hideNetworkTooltip: () => void;
   state: Pick<AppState, "currentRoute">;
@@ -14,17 +29,23 @@ interface AppRouteControllerOptions {
 }
 
 export function createAppRouteController({
+  afterRender,
   drawNetwork,
   elements,
   hideNetworkTooltip,
   state,
   translate: t,
 }: AppRouteControllerOptions) {
-  function updateDocumentTitle(route: string) {
-    document.title = route === CREDITS_ROUTE ? t("creditsPageTitle") : t("pageTitle");
+  function updateDocumentTitle(route: AppRoutePath) {
+    document.title =
+      route === CREDITS_ROUTE
+        ? t("creditsPageTitle")
+        : route === STATS_ROUTE
+          ? t("statsPageTitle")
+          : t("pageTitle");
   }
 
-  function syncCanonicalRoute() {
+  function syncCanonicalRoute(): AppRoutePath {
     const currentPath = normalizeAppPath(globalThis.location?.pathname || PLANNER_ROUTE);
     const canonicalRoute = resolveAppRoute(currentPath);
 
@@ -36,22 +57,25 @@ export function createAppRouteController({
     return canonicalRoute;
   }
 
-  function renderRoute(options: { scrollTop?: boolean } = {}) {
+  function renderRoute(options: { scrollTop?: boolean } = {}): AppRoutePath {
     const { scrollTop = false } = options;
     const route = syncCanonicalRoute();
     const showingCredits = route === CREDITS_ROUTE;
+    const showingStats = route === STATS_ROUTE;
 
-    elements.plannerHero.hidden = showingCredits;
-    elements.plannerPage.hidden = showingCredits;
-    elements.appFooter.hidden = showingCredits;
+    elements.plannerHero.hidden = showingCredits || showingStats;
+    elements.plannerPage.hidden = showingCredits || showingStats;
+    elements.appFooter.hidden = showingCredits || showingStats;
     elements.creditsHero.hidden = !showingCredits;
     elements.creditsPage.hidden = !showingCredits;
+    elements.statsHero.hidden = !showingStats;
+    elements.statsPage.hidden = !showingStats;
 
     updateDocumentTitle(route);
 
     if (showingCredits) {
       hideNetworkTooltip();
-    } else {
+    } else if (!showingStats) {
       globalThis.requestAnimationFrame(() => {
         drawNetwork();
       });
@@ -63,6 +87,9 @@ export function createAppRouteController({
         behavior: "auto",
       });
     }
+
+    afterRender?.(route);
+    return route;
   }
 
   function navigateToRoute(pathname: string) {

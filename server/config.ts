@@ -13,6 +13,15 @@ export const DEFAULT_SOURCE_DIR = path.join(ROOT_DIR, "src");
 export const HOST = process.env.HOST || "0.0.0.0";
 export const PORT = Number(process.env.PORT || 8787);
 export const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+export const NODE_ENV = process.env.NODE_ENV || "development";
+export const ANALYTICS_DATABASE_URL =
+  process.env.ANALYTICS_DATABASE_URL || process.env.DATABASE_URL || "";
+export const ANALYTICS_HASH_SALT =
+  process.env.ANALYTICS_HASH_SALT ||
+  (NODE_ENV === "production" ? "" : "development-only-analytics-salt");
+export const ANALYTICS_RETENTION_DAYS = 365;
+export const ANALYTICS_STATS_CACHE_MS = 1000 * 60 * 5;
+export const ANALYTICS_TOP_EVENTS_LIMIT = 5;
 
 export const SESSION_COOKIE = "gira_planner_session";
 export const REFRESH_COOKIE = "gira_planner_refresh";

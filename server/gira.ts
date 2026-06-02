@@ -112,6 +112,7 @@ export async function defaultRefreshSession(session: GiraSession): Promise<GiraS
 export async function defaultFetchUser(session: GiraSession): Promise<UserSummary | null> {
   const response = await upstreamJson<{
     data?: {
+      id?: number | string;
       email?: string;
       name?: string;
     };
@@ -132,6 +133,9 @@ export async function defaultFetchUser(session: GiraSession): Promise<UserSummar
     email: response.body.data.email || "",
     name: response.body.data.name || response.body.data.email || "Gira user",
   };
+  session.analyticsAccountKey = String(
+    response.body.data.id || response.body.data.email || session.user.email || ""
+  ).trim();
   return session.user;
 }
 

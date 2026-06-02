@@ -1,6 +1,13 @@
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 
-import type { Station, UserSummary } from "../src/types.js";
+import type {
+  AnalyticsEventName,
+  AnalyticsStatsResponse,
+  AppRoutePath,
+  Station,
+  TrackedLanguage,
+  UserSummary,
+} from "../src/types.js";
 
 export interface SessionTokens {
   accessToken: string;
@@ -9,6 +16,7 @@ export interface SessionTokens {
 }
 
 export interface GiraSession extends SessionTokens {
+  analyticsAccountKey?: string | null;
   createdAt: number;
   expiresAt: number;
   id: string;
@@ -30,6 +38,7 @@ export interface PublicStationRecord {
 }
 
 export interface AppServerOptions {
+  analyticsStore?: AnalyticsStore;
   clearIntervalFn?: typeof globalThis.clearInterval;
   fetchStations?: (session: GiraSession) => Promise<Station[]>;
   fetchUser?: (session: GiraSession) => Promise<UserSummary | null>;
@@ -52,6 +61,9 @@ export interface AppServerInstance {
   port: number;
   server: Server;
   state: {
+    analytics?: {
+      mode: AnalyticsStoreMode;
+    };
     loginAttempts: Map<string, number[]>;
     sessions: Map<string, GiraSession>;
   };
@@ -63,4 +75,22 @@ export interface SessionStoreOptions {
   refreshSession: (session: GiraSession) => Promise<GiraSession>;
   setIntervalFn?: typeof globalThis.setInterval;
   trustProxy?: boolean;
+}
+
+export type AnalyticsStoreMode = "disabled" | "memory" | "postgres";
+
+export interface AnalyticsEventRecord {
+  accountHash: string | null;
+  authenticated: boolean;
+  eventName: AnalyticsEventName;
+  language: TrackedLanguage;
+  occurredAt: Date;
+  route: AppRoutePath | null;
+}
+
+export interface AnalyticsStore {
+  close?: () => Promise<void>;
+  getPublicStats: (referenceTime?: Date) => Promise<AnalyticsStatsResponse>;
+  mode: AnalyticsStoreMode;
+  recordEvent: (event: AnalyticsEventRecord) => Promise<void>;
 }

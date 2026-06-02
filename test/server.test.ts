@@ -418,3 +418,133 @@ test("static server can still serve legacy /src assets when an old HTML shell is
     await fixture.cleanup().catch(() => null);
   }
 });
+
+test("analytics endpoints aggregate public stats without exposing raw account identifiers", async () => {
+  const server = createAppServer(createAuthStubs());
+
+  try {
+    const anonymousResponse = await invokeHandler(server.handler, {
+      body: {
+        eventName: "page_view",
+        language: "en",
+        route: "/",
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      url: "/api/analytics/events",
+    });
+    assert.equal(anonymousResponse.status, 202);
+
+    const loginResponse = await invokeHandler(server.handler, {
+      body: {
+        email: "rider@example.com",
+        password: "not-a-real-password",
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      url: "/api/login",
+    });
+    const authCookie = cookieHeaderFromSetCookies(getSetCookies(loginResponse));
+
+    for (const eventName of ["planner_run", "stats_viewed"] as const) {
+      const trackedResponse = await invokeHandler(server.handler, {
+        body: {
+          eventName,
+          language: "pt-PT",
+          route: eventName === "stats_viewed" ? "/stats" : "/",
+        },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: authCookie,
+        },
+        method: "POST",
+        url: "/api/analytics/events",
+      });
+      assert.equal(trackedResponse.status, 202);
+    }
+
+    const statsResponse = await invokeHandler(server.handler, {
+      url: "/api/analytics/stats",
+    });
+
+    assert.equal(statsResponse.status, 200);
+    const stats = await statsResponse.json();
+    assert.equal(stats.enabled, true);
+    assert.deepEqual(stats.signedInUniqueUsers, {
+      last30Days: 1,
+      last7Days: 1,
+      lifetime: 1,
+    });
+    assert.deepEqual(stats.anonymous, {
+      eventsLast30Days: 1,
+      eventsLast7Days: 1,
+      pageViewsLast30Days: 1,
+      pageViewsLast7Days: 1,
+    });
+    assert.deepEqual(stats.totals, {
+      eventsLast30Days: 3,
+      eventsLast7Days: 3,
+    });
+    assert.deepEqual(stats.languagesLast30Days, {
+      en: {
+        anonymousEventCount: 1,
+        eventCount: 1,
+        signedInUniqueUsers: 0,
+      },
+      "pt-PT": {
+        anonymousEventCount: 0,
+        eventCount: 2,
+        signedInUniqueUsers: 1,
+      },
+    });
+    assert.deepEqual(stats.topEventsLast30Days, [
+      {
+        anonymousCount: 0,
+        eventName: "planner_run",
+        signedInCount: 1,
+        totalCount: 1,
+      },
+      {
+        anonymousCount: 0,
+        eventName: "stats_viewed",
+        signedInCount: 1,
+        totalCount: 1,
+      },
+    ]);
+
+    const serializedStats = JSON.stringify(stats);
+    assert.doesNotMatch(serializedStats, /rider@example\.com/u);
+    assert.doesNotMatch(serializedStats, /refresh-initial/u);
+  } finally {
+    await server.close().catch(() => null);
+  }
+});
+
+test("analytics events reject unexpected fields", async () => {
+  const server = createAppServer(createAuthStubs());
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      body: {
+        eventName: "page_view",
+        identity: "forbidden",
+        language: "en",
+        route: "/",
+      },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      url: "/api/analytics/events",
+    });
+
+    assert.equal(response.status, 400);
+    assert.match(await response.text(), /invalid_analytics_event_field/u);
+  } finally {
+    await server.close().catch(() => null);
+  }
+});

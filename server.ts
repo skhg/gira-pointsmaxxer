@@ -5,15 +5,32 @@ import type { AppError } from "./src/types.js";
 import type { AppServerInstance, AppServerOptions, RequestWithMeta } from "./server/types.js";
 
 import {
+  ANALYTICS_DATABASE_URL,
+  ANALYTICS_HASH_SALT,
+  ANALYTICS_RETENTION_DAYS,
+  ANALYTICS_STATS_CACHE_MS,
+  ANALYTICS_TOP_EVENTS_LIMIT,
   DEFAULT_SOURCE_DIR,
   DEFAULT_STATIC_DIRS,
   HOST,
   MAX_JSON_BODY_BYTES,
+  NODE_ENV,
   PORT,
   SESSION_COOKIE,
   SESSION_TTL_MS,
   TRUST_PROXY,
 } from "./server/config.js";
+import {
+  createEmptyAnalyticsStats,
+  hashAnalyticsAccountKey,
+  parseAnalyticsEventRequest,
+  resolveAnalyticsAccountKey,
+} from "./server/analytics.js";
+import {
+  createDisabledAnalyticsStore,
+  createInMemoryAnalyticsStore,
+  createPostgresAnalyticsStore,
+} from "./server/analytics-store.js";
 import {
   clearAuthCookies,
   maybeRedirectLegacyHost,
@@ -38,6 +55,19 @@ const __filename = fileURLToPath(import.meta.url);
 
 export function createAppServer(options: AppServerOptions = {}): AppServerInstance {
   const {
+    analyticsStore = ANALYTICS_DATABASE_URL && ANALYTICS_HASH_SALT
+      ? createPostgresAnalyticsStore(ANALYTICS_DATABASE_URL, {
+          retentionDays: ANALYTICS_RETENTION_DAYS,
+          statsCacheMs: ANALYTICS_STATS_CACHE_MS,
+          topEventsLimit: ANALYTICS_TOP_EVENTS_LIMIT,
+        })
+      : NODE_ENV === "production"
+        ? createDisabledAnalyticsStore()
+        : createInMemoryAnalyticsStore({
+            retentionDays: ANALYTICS_RETENTION_DAYS,
+            statsCacheMs: ANALYTICS_STATS_CACHE_MS,
+            topEventsLimit: ANALYTICS_TOP_EVENTS_LIMIT,
+          }),
     clearIntervalFn = globalThis.clearInterval,
     fetchUser = defaultFetchUser,
     host = HOST,
@@ -140,6 +170,44 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
         return;
       }
 
+      if (url.pathname === "/api/analytics/events" && method === "POST") {
+        const body = await readJsonBody(request, {
+          maxBytes: Math.min(MAX_JSON_BODY_BYTES, 2 * 1024),
+        });
+        const event = parseAnalyticsEventRequest(body);
+        const session = await sessionStore.getSession(request);
+        if (request.__clearAuthCookies) {
+          clearAuthCookies(request, response, { trustProxy });
+        }
+
+        await analyticsStore.recordEvent({
+          accountHash: hashAnalyticsAccountKey(
+            resolveAnalyticsAccountKey(session),
+            ANALYTICS_HASH_SALT
+          ),
+          authenticated: Boolean(session?.user),
+          eventName: event.eventName,
+          language: event.language,
+          occurredAt: new Date(),
+          route: event.route || null,
+        });
+
+        writeJson(response, 202, {
+          ok: true,
+          tracked: analyticsStore.mode !== "disabled",
+        });
+        return;
+      }
+
+      if (url.pathname === "/api/analytics/stats" && method === "GET") {
+        const stats =
+          analyticsStore.mode === "disabled"
+            ? createEmptyAnalyticsStats()
+            : await analyticsStore.getPublicStats(new Date());
+        writeJson(response, 200, stats);
+        return;
+      }
+
       if (url.pathname === "/api/stations" && method === "GET") {
         const session = await sessionStore.getSession(request);
         if (!session) {
@@ -211,21 +279,29 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
   return {
     close() {
       sessionStore.close();
-      return new Promise<void>((resolve, reject) => {
-        server.close(error => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
-      });
+      return Promise.resolve(analyticsStore.close?.()).then(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            server.close(error => {
+              if (error) {
+                reject(error);
+                return;
+              }
+              resolve();
+            });
+          })
+      );
     },
     handler,
     host,
     port,
     server,
-    state: sessionStore.state,
+    state: {
+      ...sessionStore.state,
+      analytics: {
+        mode: analyticsStore.mode,
+      },
+    },
   };
 }
 

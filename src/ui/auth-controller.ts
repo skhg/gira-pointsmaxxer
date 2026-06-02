@@ -24,10 +24,13 @@ interface AuthControllerOptions {
     | "loginForm"
     | "logoutButton"
     | "passwordInput"
+    | "rememberEmailCheckbox"
     | "sessionStatus"
   >;
   getErrorMessage: (error: unknown) => string;
   isLocalDevelopmentHost: () => boolean;
+  onSignInSuccess?: () => void;
+  onStationsRefreshed?: () => void;
   setStations: (stations: StationLike[], source: string, fetchedAt: string) => void;
   showToast: (message: string, type?: string) => void;
   state: AppState;
@@ -38,6 +41,8 @@ export function createAuthController({
   elements,
   getErrorMessage,
   isLocalDevelopmentHost,
+  onSignInSuccess,
+  onStationsRefreshed,
   setStations,
   showToast,
   state,
@@ -76,6 +81,7 @@ export function createAuthController({
     if (!savedCredentials) return;
 
     elements.emailInput.value = savedCredentials.email;
+    elements.rememberEmailCheckbox.checked = savedCredentials.rememberEmail === true;
   }
 
   async function login(event: SubmitEvent) {
@@ -85,13 +91,15 @@ export function createAuthController({
 
     const email = elements.emailInput.value.trim();
     const password = elements.passwordInput.value;
+    const rememberEmail = elements.rememberEmailCheckbox.checked;
 
     try {
       const data = await loginWithGira(email, password);
-      await saveCredentials(email).catch(() => null);
+      await saveCredentials(email, rememberEmail).catch(() => null);
       elements.passwordInput.value = "";
 
       setUser(data.user);
+      onSignInSuccess?.();
       showToast(t("toasts.signInAndLoad"));
       await loadLiveStations();
     } catch (error) {
@@ -102,9 +110,16 @@ export function createAuthController({
   }
 
   async function logout() {
-    await Promise.allSettled([logoutFromGira(), clearSavedCredentials()]);
+    const shouldKeepEmail = elements.rememberEmailCheckbox.checked;
+    await Promise.allSettled([
+      logoutFromGira(),
+      shouldKeepEmail ? saveCredentials(elements.emailInput.value, true) : clearSavedCredentials(),
+    ]);
     setUser(null);
-    elements.emailInput.value = "";
+    if (!shouldKeepEmail) {
+      elements.emailInput.value = "";
+      elements.rememberEmailCheckbox.checked = false;
+    }
     elements.passwordInput.value = "";
     elements.loginButton.textContent = t("auth.signIn");
     showToast(t("toasts.signOutCleared"));
@@ -118,6 +133,7 @@ export function createAuthController({
       const data = await loadLiveSnapshot();
       setStations(data.stations, data.source, data.fetchedAt);
       setUser(data.user || state.user);
+      onStationsRefreshed?.();
       showToast(
         t("snapshot.loadedLiveStations", {
           count: data.stationCount,

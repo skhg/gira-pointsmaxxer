@@ -73,6 +73,8 @@ export interface AppElements {
   routeLinks: HTMLAnchorElement[];
   routeList: HTMLElement;
   routeSectionTitle: HTMLElement;
+  rememberEmailCheckbox: HTMLInputElement;
+  rememberEmailLabel: HTMLElement;
   sessionLabel: HTMLElement;
   sessionStatus: HTMLElement;
   snapshotDisclosureSummary: HTMLElement;
@@ -84,11 +86,30 @@ export interface AppElements {
   startStationLabel: HTMLElement;
   stationCount: HTMLElement;
   stationsLabel: HTMLElement;
+  statsAnonymousBreakdown: HTMLElement;
+  statsAnonymousTitle: HTMLElement;
+  statsBackToPlannerLink: HTMLAnchorElement;
+  statsHero: HTMLElement;
+  statsHeroEyebrow: HTMLElement;
+  statsHeroLede: HTMLElement;
+  statsHeroTitle: HTMLElement;
+  statsLanguageGrid: HTMLElement;
+  statsLanguageTitle: HTMLElement;
+  statsLastUpdated: HTMLElement;
+  statsPage: HTMLElement;
+  statsPanelEyebrow: HTMLElement;
+  statsPanelTitle: HTMLElement;
+  statsSignedInBreakdown: HTMLElement;
+  statsSignedInTitle: HTMLElement;
+  statsSummaryGrid: HTMLElement;
+  statsTopEventsList: HTMLElement;
+  statsTopEventsTitle: HTMLElement;
   summaryDetails: HTMLElement;
   summarySectionTitle: HTMLElement;
   summaryStepEyebrow: HTMLElement;
   timeValue: HTMLElement;
   toast: HTMLElement;
+  footerStatsLink: HTMLAnchorElement;
 }
 
 export function getAppElements(): AppElements {
@@ -158,6 +179,8 @@ export function getAppElements(): AppElements {
     routeLinks: Array.from(document.querySelectorAll<HTMLAnchorElement>("[data-route]")),
     routeList: getRequiredElement<HTMLElement>("routeList"),
     routeSectionTitle: getRequiredElement<HTMLElement>("routeSectionTitle"),
+    rememberEmailCheckbox: getRequiredElement<HTMLInputElement>("rememberEmailCheckbox"),
+    rememberEmailLabel: getRequiredElement<HTMLElement>("rememberEmailLabel"),
     sessionLabel: getRequiredElement<HTMLElement>("sessionLabel"),
     sessionStatus: getRequiredElement<HTMLElement>("sessionStatus"),
     snapshotDisclosureSummary: getRequiredElement<HTMLElement>("snapshotDisclosureSummary"),
@@ -169,10 +192,29 @@ export function getAppElements(): AppElements {
     startStationLabel: getRequiredElement<HTMLElement>("startStationLabel"),
     stationCount: getRequiredElement<HTMLElement>("stationCount"),
     stationsLabel: getRequiredElement<HTMLElement>("stationsLabel"),
+    statsAnonymousBreakdown: getRequiredElement<HTMLElement>("statsAnonymousBreakdown"),
+    statsAnonymousTitle: getRequiredElement<HTMLElement>("statsAnonymousTitle"),
+    statsBackToPlannerLink: getRequiredElement<HTMLAnchorElement>("statsBackToPlannerLink"),
+    statsHero: getRequiredElement<HTMLElement>("statsHero"),
+    statsHeroEyebrow: getRequiredElement<HTMLElement>("statsHeroEyebrow"),
+    statsHeroLede: getRequiredElement<HTMLElement>("statsHeroLede"),
+    statsHeroTitle: getRequiredElement<HTMLElement>("statsHeroTitle"),
+    statsLanguageGrid: getRequiredElement<HTMLElement>("statsLanguageGrid"),
+    statsLanguageTitle: getRequiredElement<HTMLElement>("statsLanguageTitle"),
+    statsLastUpdated: getRequiredElement<HTMLElement>("statsLastUpdated"),
+    statsPage: getRequiredElement<HTMLElement>("statsPage"),
+    statsPanelEyebrow: getRequiredElement<HTMLElement>("statsPanelEyebrow"),
+    statsPanelTitle: getRequiredElement<HTMLElement>("statsPanelTitle"),
+    statsSignedInBreakdown: getRequiredElement<HTMLElement>("statsSignedInBreakdown"),
+    statsSignedInTitle: getRequiredElement<HTMLElement>("statsSignedInTitle"),
+    statsSummaryGrid: getRequiredElement<HTMLElement>("statsSummaryGrid"),
+    statsTopEventsList: getRequiredElement<HTMLElement>("statsTopEventsList"),
+    statsTopEventsTitle: getRequiredElement<HTMLElement>("statsTopEventsTitle"),
     summaryDetails: getRequiredElement<HTMLElement>("summaryDetails"),
     summarySectionTitle: getRequiredElement<HTMLElement>("summarySectionTitle"),
     summaryStepEyebrow: getRequiredElement<HTMLElement>("summaryStepEyebrow"),
     timeValue: getRequiredElement<HTMLElement>("timeValue"),
     toast: getRequiredElement<HTMLElement>("toast"),
+    footerStatsLink: getRequiredElement<HTMLAnchorElement>("footerStatsLink"),
   };
 }

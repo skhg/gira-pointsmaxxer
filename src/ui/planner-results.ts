@@ -20,6 +20,7 @@ interface PlannerResultsRendererOptions {
   >;
   getLocale: () => string;
   getStations: () => Station[];
+  onStationLinkOpened?: () => void;
   translate: (key: string, values?: MessageValues) => string;
 }
 
@@ -52,6 +53,7 @@ export function createPlannerResultsRenderer({
   elements,
   getLocale,
   getStations,
+  onStationLinkOpened,
   translate: t,
 }: PlannerResultsRendererOptions) {
   function formatClockTime(date: Date) {
@@ -96,6 +98,9 @@ export function createPlannerResultsRenderer({
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = getStationLabel(station);
+    link.addEventListener("click", () => {
+      onStationLinkOpened?.();
+    });
     return link;
   }
 

@@ -27,6 +27,7 @@ const translations = {
     locale: "en-GB",
     pageTitle: "Gira Pointsmaxxer",
     creditsPageTitle: "Disclaimer & Credits · Gira Pointsmaxxer",
+    statsPageTitle: "Public Stats · Gira Pointsmaxxer",
     language: {
       label: "Language",
     },
@@ -42,19 +43,25 @@ const translations = {
       title: "Disclaimer & credits",
       lede: "What this app is, where its data comes from, and how to use it responsibly.",
     },
+    statsHero: {
+      eyebrow: "Public metrics",
+      title: "Public app stats",
+      lede: "A simple public view of how the app is being used, without analytics cookies or browser IDs.",
+    },
     auth: {
       step: "Step 1",
       title: "Connect your account",
       emailLabel: "Gira email",
       passwordLabel: "Gira password",
+      rememberEmail: "Remember email on this device",
       signIn: "Sign in to Gira",
       signingIn: "Signing in...",
       logout: "Log out",
       useDemoSnapshot: "Use demo snapshot",
       summarySignedOut:
-        "Live mode uses your own Gira account and can remember your sign-in in this browser between refreshes until you log out.",
+        "Live mode uses your own Gira account and can keep your sign-in active in this browser between refreshes until you log out.",
       summarySignedIn:
-        "Signed in as {{name}}. Live snapshots stay server-side for this app, and the saved sign-in stays in this browser until you log out.",
+        "Signed in as {{name}}. Live snapshots stay server-side for this app, and the essential session state stays in this browser until you log out.",
       sessionSignedIn: "Signed in",
       sessionSignedOut: "Signed out",
     },
@@ -160,8 +167,8 @@ const translations = {
           title: "About this app",
           paragraphs: [
             "Gira Pointsmaxxer is an independent project. It is not an official app of EMEL or Gira, and it has no association with them.",
-            "This app was developed with Codex.",
           ],
+          richParagraphs: [["This app was developed with ", creditsLink("Codex", "https://openai.com/codex/"), "."]],
         },
         {
           title: "What is Gira?",
@@ -192,14 +199,6 @@ const translations = {
               ".",
             ],
           ],
-        },
-        {
-          title: "Privacy",
-          paragraphs: [
-            "We do not store your Gira password or other user-entered login details, and we do not intentionally record personally identifying details about how you use this app.",
-          ],
-          note:
-            "If you choose to sign in, the app may keep secure session state in your browser so it can stay signed in between refreshes.",
         },
         {
           title: "Safety",
@@ -237,7 +236,83 @@ const translations = {
             ],
           ],
         },
+        {
+          title: "Privacy",
+          paragraphs: [
+            "We do not store your Gira password or other user-entered login details, and we do not intentionally record personally identifying details about how you use this app.",
+            "The app uses essential session cookies to keep you signed in to live Gira mode, and it stores your language preference locally in this browser.",
+          ],
+          richParagraphs: [
+            [
+              "The ",
+              creditsLink("public metrics page", "/stats"),
+              " does not use analytics cookies, browser IDs, or local analytics storage. Public stats are aggregated and anonymized.",
+            ],
+          ],
+          note:
+            "If you choose to remember your email on this device, that convenience setting is stored locally only when you opt in.",
+        },
       ],
+    },
+    stats: {
+      heroEyebrow: "Public metrics",
+      heroTitle: "Public app stats",
+      heroLede:
+        "A simple public view of how the app is being used, without analytics cookies or browser IDs.",
+      panelEyebrow: "First-party analytics",
+      panelTitle: "Public product metrics",
+      backToPlanner: "Back to planner",
+      footerLink: "Public stats",
+      unavailable: "Public metrics are not configured yet.",
+      lastUpdated: "Last updated: {{timestamp}}",
+      signedInTitle: "Signed-in unique users",
+      anonymousTitle: "Anonymous visits and events",
+      languageTitle: "Language split over the last 30 days",
+      topEventsTitle: "Most-used features over the last 30 days",
+      noEvents: "No usage events have been recorded yet.",
+      cards: {
+        signedInLifetime: "Signed-in uniques",
+        signedIn30Days: "Signed-in uniques · 30 days",
+        anonymousVisits30Days: "Anonymous visits · 30 days",
+        totalEvents30Days: "Total events · 30 days",
+      },
+      signedInBreakdown: {
+        lifetime: "Lifetime",
+        last7Days: "Last 7 days",
+        last30Days: "Last 30 days",
+      },
+      anonymousBreakdown: {
+        pageViewsLast7Days: "Anonymous visits · last 7 days",
+        pageViewsLast30Days: "Anonymous visits · last 30 days",
+        eventsLast7Days: "Anonymous events · last 7 days",
+        eventsLast30Days: "Anonymous events · last 30 days",
+      },
+      languageBreakdown: {
+        events: "Events",
+        anonymousEvents: "Anonymous events",
+        signedInUsers: "Signed-in users",
+      },
+      topEventBreakdown: {
+        total: "Total",
+        signedIn: "Signed-in",
+        anonymous: "Anonymous",
+      },
+      languages: {
+        en: "English",
+        "pt-PT": "Portuguese",
+      },
+      eventNames: {
+        app_open: "App opens",
+        page_view: "Page views",
+        language_selected: "Language changes",
+        sign_in_success: "Successful sign-ins",
+        stations_refreshed: "Live station refreshes",
+        planner_run: "Planner runs",
+        current_location_used: "Current location uses",
+        google_maps_link_opened: "Google Maps opens",
+        credits_viewed: "Credits page views",
+        stats_viewed: "Stats page views",
+      },
     },
     toasts: {
       signInAndLoad: "Signed in. Loading the latest Gira snapshot...",
@@ -289,6 +364,7 @@ const translations = {
     locale: "pt-PT",
     pageTitle: "Gira Pointsmaxxer",
     creditsPageTitle: "Avisos e créditos · Gira Pointsmaxxer",
+    statsPageTitle: "Estatísticas públicas · Gira Pointsmaxxer",
     language: {
       label: "Idioma",
     },
@@ -304,11 +380,17 @@ const translations = {
       title: "Avisos e créditos",
       lede: "O que é esta app, de onde vêm os dados e como utilizá-la de forma responsável.",
     },
+    statsHero: {
+      eyebrow: "Métricas públicas",
+      title: "Estatísticas públicas da app",
+      lede: "Uma vista pública simples sobre a utilização da app, sem cookies de analítica nem identificadores do navegador.",
+    },
     auth: {
       step: "Passo 1",
       title: "Liga a tua conta",
       emailLabel: "Email Gira",
       passwordLabel: "Palavra-passe Gira",
+      rememberEmail: "Lembrar email neste dispositivo",
       signIn: "Entrar na Gira",
       signingIn: "A entrar...",
       logout: "Terminar sessão",
@@ -316,7 +398,7 @@ const translations = {
       summarySignedOut:
         "O modo em direto usa a tua própria conta Gira e pode manter a tua sessão neste navegador entre atualizações até terminares sessão.",
       summarySignedIn:
-        "Sessão iniciada como {{name}}. Os snapshots em direto ficam no servidor desta app e a sessão guardada mantém-se neste navegador até terminares sessão.",
+        "Sessão iniciada como {{name}}. Os snapshots em direto ficam no servidor desta app e o estado essencial da sessão mantém-se neste navegador até terminares sessão.",
       sessionSignedIn: "Sessão iniciada",
       sessionSignedOut: "Sem sessão",
     },
@@ -422,8 +504,8 @@ const translations = {
           title: "Sobre esta app",
           paragraphs: [
             "A Gira Pointsmaxxer é um projeto independente. Não é uma app oficial da EMEL nem da Gira, e não tem qualquer associação com essas entidades.",
-            "Esta app foi desenvolvida com o Codex.",
           ],
+          richParagraphs: [["Esta app foi desenvolvida com o ", creditsLink("Codex", "https://openai.com/codex/"), "."]],
         },
         {
           title: "O que é a Gira?",
@@ -454,14 +536,6 @@ const translations = {
               ".",
             ],
           ],
-        },
-        {
-          title: "Privacidade",
-          paragraphs: [
-            "Não armazenamos a tua palavra-passe da Gira nem outros dados de autenticação introduzidos por ti, e não registamos intencionalmente dados pessoalmente identificáveis sobre a forma como usas esta app.",
-          ],
-          note:
-            "Se escolheres iniciar sessão, a app pode manter um estado de sessão seguro no teu navegador para que continues autenticado entre atualizações.",
         },
         {
           title: "Segurança",
@@ -499,7 +573,83 @@ const translations = {
             ],
           ],
         },
+        {
+          title: "Privacidade",
+          paragraphs: [
+            "Não armazenamos a tua palavra-passe da Gira nem outros dados de autenticação introduzidos por ti, e não registamos intencionalmente dados pessoalmente identificáveis sobre a forma como usas esta app.",
+            "A app usa cookies de sessão essenciais para te manter com sessão iniciada no modo Gira em direto, e guarda localmente a tua preferência de idioma neste navegador.",
+          ],
+          richParagraphs: [
+            [
+              "A ",
+              creditsLink("página de métricas públicas", "/stats"),
+              " não usa cookies de analítica, identificadores do navegador nem armazenamento local de analítica. As estatísticas públicas são agregadas e anonimizadas.",
+            ],
+          ],
+          note:
+            "Se escolheres lembrar o teu email neste dispositivo, essa opção de conveniência só é guardada localmente quando fazes opt-in.",
+        },
       ],
+    },
+    stats: {
+      heroEyebrow: "Métricas públicas",
+      heroTitle: "Estatísticas públicas da app",
+      heroLede:
+        "Uma vista pública simples sobre a utilização da app, sem cookies de analítica nem identificadores do navegador.",
+      panelEyebrow: "Analítica própria",
+      panelTitle: "Métricas públicas do produto",
+      backToPlanner: "Voltar ao planeador",
+      footerLink: "Estatísticas públicas",
+      unavailable: "As métricas públicas ainda não estão configuradas.",
+      lastUpdated: "Última atualização: {{timestamp}}",
+      signedInTitle: "Utilizadores únicos com sessão iniciada",
+      anonymousTitle: "Visitas e eventos anónimos",
+      languageTitle: "Distribuição por idioma nos últimos 30 dias",
+      topEventsTitle: "Funcionalidades mais usadas nos últimos 30 dias",
+      noEvents: "Ainda não foram registados eventos de utilização.",
+      cards: {
+        signedInLifetime: "Únicos com sessão iniciada",
+        signedIn30Days: "Únicos com sessão iniciada · 30 dias",
+        anonymousVisits30Days: "Visitas anónimas · 30 dias",
+        totalEvents30Days: "Eventos totais · 30 dias",
+      },
+      signedInBreakdown: {
+        lifetime: "Total",
+        last7Days: "Últimos 7 dias",
+        last30Days: "Últimos 30 dias",
+      },
+      anonymousBreakdown: {
+        pageViewsLast7Days: "Visitas anónimas · últimos 7 dias",
+        pageViewsLast30Days: "Visitas anónimas · últimos 30 dias",
+        eventsLast7Days: "Eventos anónimos · últimos 7 dias",
+        eventsLast30Days: "Eventos anónimos · últimos 30 dias",
+      },
+      languageBreakdown: {
+        events: "Eventos",
+        anonymousEvents: "Eventos anónimos",
+        signedInUsers: "Utilizadores com sessão iniciada",
+      },
+      topEventBreakdown: {
+        total: "Total",
+        signedIn: "Com sessão",
+        anonymous: "Anónimo",
+      },
+      languages: {
+        en: "Inglês",
+        "pt-PT": "Português",
+      },
+      eventNames: {
+        app_open: "Aberturas da app",
+        page_view: "Visualizações de página",
+        language_selected: "Mudanças de idioma",
+        sign_in_success: "Inícios de sessão bem-sucedidos",
+        stations_refreshed: "Atualizações de estações em direto",
+        planner_run: "Execuções do planeador",
+        current_location_used: "Utilizações da localização atual",
+        google_maps_link_opened: "Aberturas no Google Maps",
+        credits_viewed: "Visualizações da página de créditos",
+        stats_viewed: "Visualizações da página de estatísticas",
+      },
     },
     toasts: {
       signInAndLoad: "Sessão iniciada. A carregar o snapshot mais recente da Gira...",

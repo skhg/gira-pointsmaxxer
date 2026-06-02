@@ -85,25 +85,33 @@ export async function loadSavedCredentials() {
       return null;
     }
 
+    const rememberEmail = credentials?.rememberEmail === true || !("rememberEmail" in credentials);
+
     if (credentials?.password) {
       await setStoredValue(
         CREDENTIALS_STORAGE_KEY,
         JSON.stringify({
           email,
+          rememberEmail,
         })
       );
     }
 
-    return { email } satisfies SavedCredentials;
+    if (!rememberEmail) {
+      await clearSavedCredentials();
+      return null;
+    }
+
+    return { email, rememberEmail: true } satisfies SavedCredentials;
   } catch {
     await clearSavedCredentials();
     return null;
   }
 }
 
-export async function saveCredentials(email) {
+export async function saveCredentials(email: string, rememberEmail: boolean) {
   const normalizedEmail = String(email || "").trim();
-  if (!normalizedEmail) {
+  if (!normalizedEmail || !rememberEmail) {
     await clearSavedCredentials();
     return;
   }
@@ -112,6 +120,7 @@ export async function saveCredentials(email) {
     CREDENTIALS_STORAGE_KEY,
     JSON.stringify({
       email: normalizedEmail,
+      rememberEmail: true,
     })
   );
 }

@@ -6,8 +6,10 @@ import { chromium, type Browser, type Page } from "playwright-core";
 
 import { startTestServer } from "./helpers/app-server.js";
 import { buildStation } from "./helpers/stations.js";
+import { createInMemoryAnalyticsStore } from "../server/analytics-store.js";
 
 const LANGUAGE_STORAGE_KEY = "gira-pointsmaxxer-language-v1";
+const CREDENTIALS_STORAGE_KEY = "gira-pointsmaxxer-credentials-v1";
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.CHROME_EXECUTABLE_PATH,
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -49,7 +51,9 @@ test("browser smoke: demo snapshot can produce a route in the built app", async 
     return;
   }
 
-  const server = await startTestServer();
+  const server = await startTestServer({
+    analyticsStore: createInMemoryAnalyticsStore(),
+  });
   let browser: Browser | null = null;
 
   try {
@@ -200,7 +204,9 @@ test("browser smoke: disclaimer page is reachable from hero, footer, and direct 
     return;
   }
 
-  const server = await startTestServer();
+  const server = await startTestServer({
+    analyticsStore: createInMemoryAnalyticsStore(),
+  });
   let browser: Browser | null = null;
 
   try {
@@ -442,6 +448,132 @@ test("browser smoke: language picker can persist Portuguese across reloads", asy
       await portugueseStoredPage.locator("#plannerWhatIsThisLink").textContent(),
       "O que é isto?"
     );
+  } finally {
+    if (browser) await browser.close();
+    await server.app.close();
+  }
+});
+
+test("browser smoke: remembered email is only stored when the opt-in is selected", async t => {
+  const chromeExecutable = findChromeExecutable();
+  if (!chromeExecutable) {
+    t.skip("Google Chrome is not installed on this machine.");
+    return;
+  }
+
+  const server = await startTestServer({
+    fetchStations: async () => [],
+    fetchUser: async session => {
+      session.user = {
+        email: "rider@example.com",
+        name: "Test Rider",
+      };
+      return session.user;
+    },
+    loginToGira: async () => ({
+      accessToken: "remember-access",
+      expiration: Date.now() + 60 * 60 * 1000,
+      refreshToken: "remember-refresh",
+    }),
+  });
+  let browser: Browser | null = null;
+
+  try {
+    browser = await chromium.launch({
+      executablePath: chromeExecutable,
+      headless: true,
+    });
+    const page = await openSmokePage(browser);
+
+    await page.goto(`${server.baseUrl}/`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await page.locator("#emailInput").fill("rider@example.com");
+    await page.locator("#passwordInput").fill("not-a-real-password");
+    await page.locator("#loginButton").click();
+    await page.waitForFunction(() => globalThis.document.getElementById("loginForm")?.hidden === true);
+
+    await page.locator("#logoutButton").click();
+    await page.waitForFunction(() => globalThis.document.getElementById("loginForm")?.hidden === false);
+    await page.reload({ waitUntil: "domcontentloaded" });
+
+    assert.equal(
+      await page.evaluate(storageKey => globalThis.localStorage.getItem(storageKey), CREDENTIALS_STORAGE_KEY),
+      null
+    );
+    assert.equal(await page.locator("#emailInput").inputValue(), "");
+
+    await page.locator("#emailInput").fill("rider@example.com");
+    await page.locator("#passwordInput").fill("not-a-real-password");
+    await page.locator("#rememberEmailCheckbox").check();
+    await page.locator("#loginButton").click();
+    await page.waitForFunction(() => globalThis.document.getElementById("loginForm")?.hidden === true);
+
+    await page.locator("#logoutButton").click();
+    await page.waitForFunction(() => globalThis.document.getElementById("loginForm")?.hidden === false);
+    await page.reload({ waitUntil: "domcontentloaded" });
+
+    assert.match(
+      await page.evaluate(storageKey => globalThis.localStorage.getItem(storageKey) || "", CREDENTIALS_STORAGE_KEY),
+      /rider@example\.com/u
+    );
+    assert.equal(await page.locator("#emailInput").inputValue(), "rider@example.com");
+    assert.equal(await page.locator("#rememberEmailCheckbox").isChecked(), true);
+  } finally {
+    if (browser) await browser.close();
+    await server.app.close();
+  }
+});
+
+test("browser smoke: public stats page shows aggregated usage", async t => {
+  const chromeExecutable = findChromeExecutable();
+  if (!chromeExecutable) {
+    t.skip("Google Chrome is not installed on this machine.");
+    return;
+  }
+
+  const server = await startTestServer({
+    analyticsStore: createInMemoryAnalyticsStore(),
+  });
+  let browser: Browser | null = null;
+
+  try {
+    browser = await chromium.launch({
+      executablePath: chromeExecutable,
+      headless: true,
+    });
+    const page = await openSmokePage(browser);
+
+    await page.goto(`${server.baseUrl}/`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await page.getByRole("button", { name: "Use demo snapshot" }).click();
+    await setFinishTimeOnPage(page, 120);
+    await page.locator("#startInput").selectOption({ index: 2 });
+    await page.locator("#endInput").selectOption({ index: 2 });
+    await page.getByRole("button", { name: "Find best strategy" }).click();
+
+    await page.waitForFunction(() => {
+      const pointsValue = globalThis.document.getElementById("pointsValue");
+      return Boolean(pointsValue && pointsValue.textContent && pointsValue.textContent !== "0");
+    });
+
+    await page.getByRole("link", { name: "Public stats" }).click();
+    await page.waitForFunction(() => globalThis.location.pathname === "/stats");
+    await page.waitForFunction(() => {
+      return Boolean(globalThis.document.getElementById("statsPage") && !globalThis.document.getElementById("statsPage")?.hidden);
+    });
+    await page.waitForFunction(() => {
+      const lastUpdated = globalThis.document.getElementById("statsLastUpdated");
+      return Boolean(lastUpdated?.textContent && !/not configured yet/i.test(lastUpdated.textContent));
+    });
+
+    assert.equal(await page.locator("#statsPanelTitle").textContent(), "Public product metrics");
+    const statsText = await page.locator("#statsPage").textContent();
+    assert.match(statsText || "", /Planner runs/iu);
+    assert.doesNotMatch(statsText || "", /not configured yet/iu);
   } finally {
     if (browser) await browser.close();
     await server.app.close();

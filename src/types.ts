@@ -1,4 +1,17 @@
 export type MessageValues = Record<string, string | number>;
+export type AppRoutePath = "/" | "/credits" | "/stats";
+export type TrackedLanguage = "en" | "pt-PT";
+export type AnalyticsEventName =
+  | "app_open"
+  | "page_view"
+  | "language_selected"
+  | "sign_in_success"
+  | "stations_refreshed"
+  | "planner_run"
+  | "current_location_used"
+  | "google_maps_link_opened"
+  | "credits_viewed"
+  | "stats_viewed";
 
 export interface StationLike {
   assetStatus?: string;
@@ -49,6 +62,48 @@ export interface LiveSnapshotResponse extends SessionSummaryResponse {
 
 export interface SavedCredentials {
   email: string;
+  rememberEmail: true;
+}
+
+export interface AnalyticsEventRequest {
+  eventName: AnalyticsEventName;
+  language: TrackedLanguage;
+  route?: AppRoutePath;
+}
+
+export interface AnalyticsLanguageStats {
+  anonymousEventCount: number;
+  eventCount: number;
+  signedInUniqueUsers: number;
+}
+
+export interface AnalyticsTopEvent {
+  anonymousCount: number;
+  eventName: AnalyticsEventName;
+  signedInCount: number;
+  totalCount: number;
+}
+
+export interface AnalyticsStatsResponse {
+  anonymous: {
+    eventsLast30Days: number;
+    eventsLast7Days: number;
+    pageViewsLast30Days: number;
+    pageViewsLast7Days: number;
+  };
+  enabled: boolean;
+  generatedAt: string;
+  languagesLast30Days: Record<TrackedLanguage, AnalyticsLanguageStats>;
+  signedInUniqueUsers: {
+    last30Days: number;
+    last7Days: number;
+    lifetime: number;
+  };
+  topEventsLast30Days: AnalyticsTopEvent[];
+  totals: {
+    eventsLast30Days: number;
+    eventsLast7Days: number;
+  };
 }
 
 export interface LocationSnapshot {

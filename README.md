@@ -49,6 +49,28 @@ The Vite dev server runs on `http://localhost:5173` and proxies `/api/*` to the 
 
 The bundled demo stations now live in [testing/fixtures/demo-stations.ts](/Users/een2cok/workspace/gira%20grand%20prix/testing/fixtures/demo-stations.ts) instead of inside the UI file, so the application code and test/demo data stay clearly separated.
 
+## Public metrics
+
+The app now includes a public `"/stats"` page and a consent-light, first-party analytics path:
+
+- no analytics cookies
+- no analytics `localStorage`
+- no browser-generated analytics identifier
+- exact unique-user counting only for signed-in users, via a salted server-side hash of a stable Gira account identifier
+- anonymous usage is reported only as visits and event totals
+
+To enable durable metrics in production, configure:
+
+- `ANALYTICS_DATABASE_URL`: PostgreSQL connection string for the analytics store
+- `ANALYTICS_HASH_SALT`: secret salt used to hash signed-in account identifiers before storage
+
+Without those variables:
+
+- local development uses an in-memory analytics store
+- production falls back to a disabled public-stats state instead of silently pretending analytics are durable
+
+Raw analytics events are retained for `1 year`, and the server also exposes aggregated lifetime / `7` day / `30` day public metrics through `GET /api/analytics/stats`.
+
 ## Test coverage
 
 Run the automated checks with:
@@ -103,8 +125,13 @@ Why Render works well here:
 
 If you prefer to set it up manually instead of using `render.yaml`, use:
 
-- Build Command: `npm install`
-- Start Command: `npm start`
+- Build Command: `npm ci --ignore-scripts && npm run build`
+- Start Command: `npm run serve`
+
+If you want durable public metrics on Render, also provision a small PostgreSQL database in the EU and set:
+
+- `ANALYTICS_DATABASE_URL`
+- `ANALYTICS_HASH_SALT`
 
 Railway is also a good option for this same codebase, but Render is the most direct “push repo, get URL, open on phone” path.
 

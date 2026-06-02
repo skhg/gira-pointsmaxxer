@@ -6,8 +6,10 @@ export function createCreditsRenderer({ container }: { container: HTMLElement })
       if (part && typeof part === "object" && part.type === "link") {
         const link = document.createElement("a");
         link.href = part.url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
+        if (!part.url.startsWith("/")) {
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+        }
         link.textContent = part.label;
         parentElement.appendChild(link);
         continue;
