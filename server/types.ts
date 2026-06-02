@@ -42,6 +42,7 @@ export interface AppServerOptions {
   setIntervalFn?: typeof globalThis.setInterval;
   sourceDirectory?: string;
   staticDirectories?: string[];
+  trustProxy?: boolean;
 }
 
 export interface AppServerInstance {
@@ -61,4 +62,5 @@ export interface SessionStoreOptions {
   now?: () => number;
   refreshSession: (session: GiraSession) => Promise<GiraSession>;
   setIntervalFn?: typeof globalThis.setInterval;
+  trustProxy?: boolean;
 }

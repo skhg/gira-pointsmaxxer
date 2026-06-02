@@ -8,9 +8,11 @@ import {
   DEFAULT_SOURCE_DIR,
   DEFAULT_STATIC_DIRS,
   HOST,
+  MAX_JSON_BODY_BYTES,
   PORT,
   SESSION_COOKIE,
   SESSION_TTL_MS,
+  TRUST_PROXY,
 } from "./server/config.js";
 import {
   clearAuthCookies,
@@ -47,6 +49,7 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
     setIntervalFn = globalThis.setInterval,
     sourceDirectory = DEFAULT_SOURCE_DIR,
     staticDirectories = DEFAULT_STATIC_DIRS,
+    trustProxy = TRUST_PROXY,
   } = options;
   const fetchStations =
     options.fetchStations ||
@@ -63,6 +66,7 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
     now,
     refreshSession,
     setIntervalFn,
+    trustProxy,
   });
 
   const handler = async (request: RequestWithMeta, response) => {
@@ -70,14 +74,14 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
 
     try {
-      if (maybeRedirectLegacyHost(request, response, url)) {
+      if (maybeRedirectLegacyHost(request, response, url, { trustProxy })) {
         return;
       }
 
       if (url.pathname === "/api/session" && method === "GET") {
         const session = await sessionStore.getSession(request);
         if (!session) {
-          if (request.__clearAuthCookies) clearAuthCookies(request, response);
+          if (request.__clearAuthCookies) clearAuthCookies(request, response, { trustProxy });
           writeJson(response, 200, {
             authenticated: false,
           });
@@ -85,13 +89,15 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
         }
 
         if (!session.user) await fetchUser(session);
-        setAuthCookies(request, response, session);
+        setAuthCookies(request, response, session, { trustProxy });
         writeJson(response, 200, sessionSummary(session));
         return;
       }
 
       if (url.pathname === "/api/login" && method === "POST") {
-        const body = await readJsonBody(request);
+        const body = await readJsonBody(request, {
+          maxBytes: MAX_JSON_BODY_BYTES,
+        });
         const email = String(body.email || "").trim();
         const password = String(body.password || "");
 
@@ -119,7 +125,7 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
         });
 
         await fetchUser(session).catch(() => null);
-        setAuthCookies(request, response, session);
+        setAuthCookies(request, response, session, { trustProxy });
         writeJson(response, 200, sessionSummary(session));
         return;
       }
@@ -127,7 +133,7 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
       if (url.pathname === "/api/logout" && method === "POST") {
         const cookies = parseCookies(request.headers.cookie);
         sessionStore.clearSession(cookies[SESSION_COOKIE]);
-        clearAuthCookies(request, response);
+        clearAuthCookies(request, response, { trustProxy });
         writeJson(response, 200, {
           authenticated: false,
         });
@@ -137,7 +143,7 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
       if (url.pathname === "/api/stations" && method === "GET") {
         const session = await sessionStore.getSession(request);
         if (!session) {
-          if (request.__clearAuthCookies) clearAuthCookies(request, response);
+          if (request.__clearAuthCookies) clearAuthCookies(request, response, { trustProxy });
           writeJson(response, 401, {
             code: "login_required",
             error: "You need to log in with your Gira account first.",
@@ -148,7 +154,7 @@ export function createAppServer(options: AppServerOptions = {}): AppServerInstan
         const stations = await fetchStations(session);
         if (!session.user) await fetchUser(session).catch(() => null);
         session.expiresAt = now() + SESSION_TTL_MS;
-        setAuthCookies(request, response, session);
+        setAuthCookies(request, response, session, { trustProxy });
 
         writeJson(response, 200, {
           fetchedAt: new Date().toISOString(),

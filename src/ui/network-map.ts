@@ -25,14 +25,6 @@ interface NetworkMapControllerOptions {
   translate: (key: string, values?: MessageValues) => string;
 }
 
-function escapeHtml(value: unknown) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function getFocusStations(plan: Plan | null, stations: Station[]) {
   if (!plan) return stations;
 
@@ -101,31 +93,32 @@ export function createNetworkMapController({
     const docks = Number(station.docks ?? 0);
     const normalizedStation = { bikes, docks };
     tooltip.dataset.stationCode = String(station.code);
-    tooltip.innerHTML = `
-      <strong>${escapeHtml(station.label || station.name || station.code)}</strong>
-      <div>${escapeHtml(
-        translate("network.tooltipOccupied", {
-          bikes,
-          docks,
-        })
-      )}</div>
-      <div>${escapeHtml(
-        translate("network.tooltipStartBonus", {
-          value:
-            occupiedRatioNow(normalizedStation) > DEFAULT_OCCUPIED_THRESHOLD
-              ? translate("network.yes")
-              : translate("network.no"),
-        })
-      )}</div>
-      <div>${escapeHtml(
-        translate("network.tooltipFinishBonus", {
-          value:
-            finishBonusRatioAfterDock(normalizedStation) > DEFAULT_EMPTY_THRESHOLD
-              ? translate("network.yes")
-              : translate("network.no"),
-        })
-      )}</div>
-    `;
+    const title = document.createElement("strong");
+    title.textContent = String(station.label || station.name || station.code);
+
+    const occupiedLine = document.createElement("div");
+    occupiedLine.textContent = translate("network.tooltipOccupied", {
+      bikes,
+      docks,
+    });
+
+    const startBonusLine = document.createElement("div");
+    startBonusLine.textContent = translate("network.tooltipStartBonus", {
+      value:
+        occupiedRatioNow(normalizedStation) > DEFAULT_OCCUPIED_THRESHOLD
+          ? translate("network.yes")
+          : translate("network.no"),
+    });
+
+    const finishBonusLine = document.createElement("div");
+    finishBonusLine.textContent = translate("network.tooltipFinishBonus", {
+      value:
+        finishBonusRatioAfterDock(normalizedStation) > DEFAULT_EMPTY_THRESHOLD
+          ? translate("network.yes")
+          : translate("network.no"),
+    });
+
+    tooltip.replaceChildren(title, occupiedLine, startBonusLine, finishBonusLine);
     tooltip.hidden = false;
     positionTooltip(position);
   }

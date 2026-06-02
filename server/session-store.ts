@@ -21,6 +21,7 @@ export function createSessionStore(options: SessionStoreOptions) {
     now = () => Date.now(),
     refreshSession,
     setIntervalFn = globalThis.setInterval,
+    trustProxy = false,
   } = options;
 
   const sessions = new Map<string, GiraSession>();
@@ -57,7 +58,7 @@ export function createSessionStore(options: SessionStoreOptions) {
   }
 
   function assertLoginRateLimit(request: RequestWithMeta) {
-    const ipAddress = requestClientIp(request);
+    const ipAddress = requestClientIp(request, { trustProxy });
     const attempts = getActiveLoginAttempts(ipAddress);
     if (attempts.length >= LOGIN_MAX_ATTEMPTS) {
       throw {

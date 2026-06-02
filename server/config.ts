@@ -12,12 +12,14 @@ export const DEFAULT_SOURCE_DIR = path.join(ROOT_DIR, "src");
 
 export const HOST = process.env.HOST || "0.0.0.0";
 export const PORT = Number(process.env.PORT || 8787);
+export const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 
 export const SESSION_COOKIE = "gira_planner_session";
 export const REFRESH_COOKIE = "gira_planner_refresh";
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
 export const LOGIN_WINDOW_MS = 1000 * 60 * 10;
 export const LOGIN_MAX_ATTEMPTS = 8;
+export const MAX_JSON_BODY_BYTES = 8 * 1024;
 export const LEGACY_HOST_REDIRECTS = new Map([
   ["gira-grand-prix.onrender.com", "https://gira-pointsmaxxer.onrender.com"],
 ]);

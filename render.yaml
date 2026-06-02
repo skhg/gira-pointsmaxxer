@@ -4,6 +4,9 @@ services:
     region: frankfurt
     runtime: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: npm ci --ignore-scripts && npm run build
+    startCommand: npm run serve
     autoDeploy: true
+    envVars:
+      - key: TRUST_PROXY
+        value: "true"

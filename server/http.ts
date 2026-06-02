@@ -1,4 +1,10 @@
-import { LEGACY_HOST_REDIRECTS, REFRESH_COOKIE, SESSION_COOKIE, SESSION_TTL_MS, securityHeaders } from "./config.js";
+import {
+  LEGACY_HOST_REDIRECTS,
+  REFRESH_COOKIE,
+  SESSION_COOKIE,
+  SESSION_TTL_MS,
+  securityHeaders,
+} from "./config.js";
 import type { RequestWithMeta, ResponseLike } from "./types.js";
 
 export function parseCookies(header = ""): Record<string, string> {
@@ -55,8 +61,21 @@ export function writeJson(
   response.end(JSON.stringify(payload));
 }
 
-export function requestHostname(request: RequestWithMeta) {
-  const forwardedHost = request.headers["x-forwarded-host"];
+interface ProxyAwareOptions {
+  trustProxy?: boolean;
+}
+
+function createHttpError(message: string, statusCode: number, code: string) {
+  return {
+    code,
+    message,
+    statusCode,
+  };
+}
+
+export function requestHostname(request: RequestWithMeta, options: ProxyAwareOptions = {}) {
+  const { trustProxy = false } = options;
+  const forwardedHost = trustProxy ? request.headers["x-forwarded-host"] : undefined;
   const forwardedHostValue =
     typeof forwardedHost === "string" && forwardedHost.trim()
       ? forwardedHost.split(",")[0] ?? ""
@@ -72,9 +91,10 @@ export function requestHostname(request: RequestWithMeta) {
 export function maybeRedirectLegacyHost(
   request: RequestWithMeta,
   response: ResponseLike,
-  url: URL
+  url: URL,
+  options: ProxyAwareOptions = {}
 ) {
-  const redirectOrigin = LEGACY_HOST_REDIRECTS.get(requestHostname(request));
+  const redirectOrigin = LEGACY_HOST_REDIRECTS.get(requestHostname(request, options));
   if (!redirectOrigin) return false;
 
   response.writeHead(308, {
@@ -86,10 +106,20 @@ export function maybeRedirectLegacyHost(
   return true;
 }
 
-export async function readJsonBody(request: RequestWithMeta): Promise<Record<string, unknown>> {
+export async function readJsonBody(
+  request: RequestWithMeta,
+  options: { maxBytes?: number } = {}
+): Promise<Record<string, unknown>> {
+  const { maxBytes = 64 * 1024 } = options;
   const chunks: Buffer[] = [];
+  let totalBytes = 0;
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    totalBytes += buffer.length;
+    if (totalBytes > maxBytes) {
+      throw createHttpError("Request body is too large.", 413, "payload_too_large");
+    }
+    chunks.push(buffer);
   }
 
   if (chunks.length === 0) return {};
@@ -97,12 +127,13 @@ export async function readJsonBody(request: RequestWithMeta): Promise<Record<str
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
-    throw new Error("Invalid JSON body.");
+    throw createHttpError("Invalid JSON body.", 400, "invalid_json");
   }
 }
 
-export function isSecureRequest(request: RequestWithMeta) {
-  const forwardedProto = request.headers["x-forwarded-proto"];
+export function isSecureRequest(request: RequestWithMeta, options: ProxyAwareOptions = {}) {
+  const { trustProxy = false } = options;
+  const forwardedProto = trustProxy ? request.headers["x-forwarded-proto"] : undefined;
   const forwardedProtoValue =
     typeof forwardedProto === "string" && forwardedProto.trim()
       ? forwardedProto.split(",")[0] ?? ""
@@ -114,8 +145,9 @@ export function isSecureRequest(request: RequestWithMeta) {
   return Boolean((request.socket as { encrypted?: boolean } | undefined)?.encrypted);
 }
 
-export function requestClientIp(request: RequestWithMeta) {
-  const forwardedFor = request.headers["x-forwarded-for"];
+export function requestClientIp(request: RequestWithMeta, options: ProxyAwareOptions = {}) {
+  const { trustProxy = false } = options;
+  const forwardedFor = trustProxy ? request.headers["x-forwarded-for"] : undefined;
   const forwardedForValue =
     typeof forwardedFor === "string" && forwardedFor.trim()
       ? forwardedFor.split(",")[0] ?? ""
@@ -127,21 +159,34 @@ export function requestClientIp(request: RequestWithMeta) {
   return request.socket?.remoteAddress || "unknown";
 }
 
-export function buildCookieAttributes(request: RequestWithMeta, maxAgeSeconds: number) {
-  const secureAttribute = isSecureRequest(request) ? "; Secure" : "";
+export function buildCookieAttributes(
+  request: RequestWithMeta,
+  maxAgeSeconds: number,
+  options: ProxyAwareOptions = {}
+) {
+  const secureAttribute = isSecureRequest(request, options) ? "; Secure" : "";
   return `HttpOnly; Path=/; SameSite=Lax${secureAttribute}; Max-Age=${maxAgeSeconds}`;
 }
 
-export function setAuthCookies(request: RequestWithMeta, response: ResponseLike, session: { id: string; refreshToken: string }) {
-  const cookieAttributes = buildCookieAttributes(request, SESSION_TTL_MS / 1000);
+export function setAuthCookies(
+  request: RequestWithMeta,
+  response: ResponseLike,
+  session: { id: string; refreshToken: string },
+  options: ProxyAwareOptions = {}
+) {
+  const cookieAttributes = buildCookieAttributes(request, SESSION_TTL_MS / 1000, options);
   response.setHeader("Set-Cookie", [
     `${SESSION_COOKIE}=${encodeURIComponent(session.id)}; ${cookieAttributes}`,
     `${REFRESH_COOKIE}=${encodeURIComponent(session.refreshToken)}; ${cookieAttributes}`,
   ]);
 }
 
-export function clearAuthCookies(request: RequestWithMeta, response: ResponseLike) {
-  const cookieAttributes = buildCookieAttributes(request, 0);
+export function clearAuthCookies(
+  request: RequestWithMeta,
+  response: ResponseLike,
+  options: ProxyAwareOptions = {}
+) {
+  const cookieAttributes = buildCookieAttributes(request, 0, options);
   response.setHeader("Set-Cookie", [
     `${SESSION_COOKIE}=; ${cookieAttributes}`,
     `${REFRESH_COOKIE}=; ${cookieAttributes}`,

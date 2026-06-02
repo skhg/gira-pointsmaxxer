@@ -11,6 +11,7 @@ import {
 } from "./helpers/app-server.js";
 import { invokeHandler } from "./helpers/http-invoke.js";
 import { createAppServer } from "../server.js";
+import { MAX_JSON_BODY_BYTES } from "../server/config.js";
 import type { Station } from "../src/types.js";
 
 const SESSION_COOKIE = "gira_planner_session";
@@ -69,7 +70,10 @@ async function createTemporaryStaticFixture() {
 
 test("session can be rebuilt from the refresh-token cookie after a restart", async () => {
   const stubs = createAuthStubs();
-  const firstServer = createAppServer(stubs);
+  const firstServer = createAppServer({
+    ...stubs,
+    trustProxy: true,
+  });
   let refreshCookie;
 
   try {
@@ -97,7 +101,10 @@ test("session can be rebuilt from the refresh-token cookie after a restart", asy
     await firstServer.close().catch(() => null);
   }
 
-  const recoveredServer = createAppServer(stubs);
+  const recoveredServer = createAppServer({
+    ...stubs,
+    trustProxy: true,
+  });
   try {
     const sessionResponse = await invokeHandler(recoveredServer.handler, {
       headers: {
@@ -235,6 +242,7 @@ test("stations endpoint clears auth cookies after an invalid refresh cookie", as
         statusCode: 401,
       };
     },
+    trustProxy: true,
   });
 
   try {
@@ -263,6 +271,107 @@ test("stations endpoint clears auth cookies after an invalid refresh cookie", as
         cookie => cookie.startsWith(`${REFRESH_COOKIE}=`) && cookie.includes("Max-Age=0")
       )
     );
+  } finally {
+    await server.close().catch(() => null);
+  }
+});
+
+test("login rejects malformed JSON with a 400 response", async () => {
+  const server = createAppServer(createAuthStubs());
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      body: '{"email":"rider@example.com"',
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      url: "/api/login",
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      code: "invalid_json",
+      error: "Invalid JSON body.",
+    });
+  } finally {
+    await server.close().catch(() => null);
+  }
+});
+
+test("login rejects oversized JSON bodies with a 413 response", async () => {
+  const server = createAppServer(createAuthStubs());
+
+  try {
+    const response = await invokeHandler(server.handler, {
+      body: JSON.stringify({
+        email: "rider@example.com",
+        password: "x".repeat(MAX_JSON_BODY_BYTES),
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      url: "/api/login",
+    });
+
+    assert.equal(response.status, 413);
+    assert.deepEqual(await response.json(), {
+      code: "payload_too_large",
+      error: "Request body is too large.",
+    });
+  } finally {
+    await server.close().catch(() => null);
+  }
+});
+
+test("login rate limiting ignores spoofed forwarded IPs unless proxy trust is enabled", async () => {
+  let attempts = 0;
+  const server = createAppServer({
+    loginToGira: async () => {
+      attempts += 1;
+      throw {
+        message: "The Gira email or password was not accepted.",
+        statusCode: 401,
+      };
+    },
+  });
+
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await invokeHandler(server.handler, {
+        body: {
+          email: "rider@example.com",
+          password: "wrong-password",
+        },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-For": `203.0.113.${index + 10}`,
+        },
+        method: "POST",
+        remoteAddress: "198.51.100.20",
+        url: "/api/login",
+      });
+
+      assert.equal(response.status, 401);
+    }
+
+    const blockedResponse = await invokeHandler(server.handler, {
+      body: {
+        email: "rider@example.com",
+        password: "wrong-password",
+      },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.200",
+      },
+      method: "POST",
+      remoteAddress: "198.51.100.20",
+      url: "/api/login",
+    });
+
+    assert.equal(blockedResponse.status, 429);
+    assert.equal(attempts, 8);
   } finally {
     await server.close().catch(() => null);
   }

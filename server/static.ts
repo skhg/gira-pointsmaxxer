@@ -4,7 +4,14 @@ import { readFile } from "node:fs/promises";
 import { contentTypes, securityHeaders } from "./config.js";
 import { writeJson } from "./http.js";
 
-export function createStaticAssetServer(options) {
+function isPathInside(rootDirectory: string, candidatePath: string) {
+  return candidatePath === rootDirectory || candidatePath.startsWith(`${rootDirectory}${path.sep}`);
+}
+
+export function createStaticAssetServer(options: {
+  sourceDirectory: string;
+  staticDirectories: string[];
+}) {
   const {
     sourceDirectory,
     staticDirectories,
@@ -13,14 +20,14 @@ export function createStaticAssetServer(options) {
   return async function serveStatic(request, response) {
     const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
 
-    const readStaticFile = async relativePath => {
+    const readStaticFile = async (relativePath: string) => {
       for (const staticDir of staticDirectories) {
         const safePath =
           relativePath === "/"
             ? path.join(staticDir, "index.html")
             : path.resolve(staticDir, `.${relativePath}`);
 
-        if (!safePath.startsWith(staticDir)) {
+        if (!isPathInside(staticDir, safePath)) {
           continue;
         }
 
@@ -38,7 +45,7 @@ export function createStaticAssetServer(options) {
       if (relativePath.startsWith("/src/")) {
         const safePath = path.resolve(sourceDirectory, `.${relativePath.slice("/src".length)}`);
 
-        if (safePath === sourceDirectory || safePath.startsWith(`${sourceDirectory}${path.sep}`)) {
+        if (isPathInside(sourceDirectory, safePath)) {
           try {
             const file = await readFile(safePath);
             return {

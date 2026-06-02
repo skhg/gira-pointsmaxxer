@@ -23,18 +23,28 @@ interface PlannerResultsRendererOptions {
   translate: (key: string, values?: MessageValues) => string;
 }
 
-function escapeHtml(value: unknown) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function buildGoogleMapsUrl(station: Pick<StationLike, "latitude" | "longitude">) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${station.latitude},${station.longitude}`
   )}`;
+}
+
+function appendSummaryEntry(
+  listElement: HTMLDListElement,
+  label: string,
+  value: string | number
+) {
+  const wrapper = document.createElement("div");
+  const labelElement = document.createElement("dt");
+  labelElement.textContent = String(label);
+  const valueElement = document.createElement("dd");
+  valueElement.textContent = String(value);
+  wrapper.append(labelElement, valueElement);
+  listElement.appendChild(wrapper);
+}
+
+function getStationLabel(station: Pick<StationLike, "code" | "label">) {
+  return String(station.label || station.code);
 }
 
 export function createPlannerResultsRenderer({
@@ -79,16 +89,34 @@ export function createPlannerResultsRenderer({
     return `${hours}${t("units.hour")} ${formatMinuteValue(remainder, 1)}`;
   }
 
-  function renderStationLink(station: Pick<StationLike, "label" | "latitude" | "longitude">) {
-    return `<a class="route-item__station-link" href="${escapeHtml(buildGoogleMapsUrl(station))}" target="_blank" rel="noopener noreferrer">${escapeHtml(station.label)}</a>`;
+  function renderStationLink(station: Pick<StationLike, "code" | "label" | "latitude" | "longitude">) {
+    const link = document.createElement("a");
+    link.className = "route-item__station-link";
+    link.href = buildGoogleMapsUrl(station);
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = getStationLabel(station);
+    return link;
   }
 
   function renderStepTitle(step: Plan["steps"][number]) {
-    const prefix =
-      step.type === "walk"
-        ? `<span class="route-item__prefix">${escapeHtml(t("route.walkPrefix"))}</span> `
-        : "";
-    return `${prefix}${renderStationLink(step.from)} <span class="route-item__arrow">→</span> ${renderStationLink(step.to)}`;
+    const fragment = document.createDocumentFragment();
+    if (step.type === "walk") {
+      const prefix = document.createElement("span");
+      prefix.className = "route-item__prefix";
+      prefix.textContent = t("route.walkPrefix");
+      fragment.append(prefix, document.createTextNode(" "));
+    }
+
+    fragment.append(renderStationLink(step.from));
+
+    const arrow = document.createElement("span");
+    arrow.className = "route-item__arrow";
+    arrow.textContent = "→";
+    fragment.append(document.createTextNode(" "), arrow, document.createTextNode(" "));
+
+    fragment.append(renderStationLink(step.to));
+    return fragment;
   }
 
   function renderPlan(plan: Plan | null) {
@@ -102,12 +130,11 @@ export function createPlannerResultsRenderer({
       : `0 ${t("units.kilometer")}`;
 
     if (!plan) {
-      elements.summaryDetails.innerHTML = `
-        <p class="summary-placeholder">
-          ${escapeHtml(t("summary.placeholder"))}
-        </p>
-      `;
-      elements.routeList.innerHTML = "";
+      const placeholder = document.createElement("p");
+      placeholder.className = "summary-placeholder";
+      placeholder.textContent = t("summary.placeholder");
+      elements.summaryDetails.replaceChildren(placeholder);
+      elements.routeList.replaceChildren();
       drawNetwork();
       return;
     }
@@ -119,91 +146,59 @@ export function createPlannerResultsRenderer({
     const emptyAfterDock = stations.filter(
       station => finishBonusRatioAfterDock(station) > DEFAULT_EMPTY_THRESHOLD
     ).length;
-    const safeNearestStationLabel = plan.startOrigin ? escapeHtml(plan.startStation.label) : "";
-    const safePickupLabel =
-      plan.bikePickupStation.code !== plan.startStation.code
-        ? escapeHtml(plan.bikePickupStation.label)
-        : "";
-    const safeStartLabel = escapeHtml(
-      plan.startOrigin ? t("controls.currentLocation") : plan.startStation.label
+    const safeStartLabel = plan.startOrigin
+      ? t("controls.currentLocation")
+      : getStationLabel(plan.startStation);
+    const safeEndLabel = getStationLabel(plan.endStation);
+
+    const breakdown = document.createElement("dl");
+    breakdown.className = "summary-breakdown";
+    appendSummaryEntry(breakdown, t("summary.plannedAt"), formatClockTime(plan.plannedAt));
+    appendSummaryEntry(
+      breakdown,
+      t("summary.finishBy"),
+      formatClockTime(plan.challengeFinishTime)
     );
-    const safeEndLabel = escapeHtml(plan.endStation.label);
-    const nearestStationMarkup = plan.startOrigin
-      ? `
-        <div>
-          <dt>${escapeHtml(t("summary.nearestStation"))}</dt>
-          <dd>${safeNearestStationLabel}</dd>
-        </div>
-      `
-      : "";
-    const pickupMarkup =
-      plan.bikePickupStation.code !== plan.startStation.code
-        ? `
-          <div>
-            <dt>${escapeHtml(t("summary.bikePickupStation"))}</dt>
-            <dd>${safePickupLabel}</dd>
-          </div>
-        `
-        : "";
-    const initialWalkingMarkup =
-      plan.totalWalkMinutes > 0
-        ? `
-          <div>
-            <dt>${escapeHtml(t("summary.initialWalking"))}</dt>
-            <dd>${formatMinutes(plan.totalWalkMinutes)} · ${plan.totalWalkDistanceKm.toFixed(1)} ${t("units.kilometer")}</dd>
-          </div>
-        `
-        : "";
+    appendSummaryEntry(
+      breakdown,
+      t("summary.minutesRemaining"),
+      formatMinutes(plan.challengeRemainingMinutes)
+    );
+    appendSummaryEntry(breakdown, t("summary.start"), safeStartLabel);
+    appendSummaryEntry(breakdown, t("summary.finish"), safeEndLabel);
 
-    elements.summaryDetails.innerHTML = `
-      <dl class="summary-breakdown">
-        <div>
-          <dt>${escapeHtml(t("summary.plannedAt"))}</dt>
-          <dd>${formatClockTime(plan.plannedAt)}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.finishBy"))}</dt>
-          <dd>${formatClockTime(plan.challengeFinishTime)}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.minutesRemaining"))}</dt>
-          <dd>${formatMinutes(plan.challengeRemainingMinutes)}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.start"))}</dt>
-          <dd>${safeStartLabel}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.finish"))}</dt>
-          <dd>${safeEndLabel}</dd>
-        </div>
-        ${nearestStationMarkup}
-        ${pickupMarkup}
-        ${initialWalkingMarkup}
-        <div>
-          <dt>${escapeHtml(t("summary.bufferAfterRoute"))}</dt>
-          <dd>${formatMinutes(plan.remainingBufferMinutes)}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.startBonusPoints"))}</dt>
-          <dd>${plan.totalStartBonus}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.finishBonusPoints"))}</dt>
-          <dd>${plan.totalFinishBonus}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.liveBonusReadyStarts"))}</dt>
-          <dd>${occupiedNow}</dd>
-        </div>
-        <div>
-          <dt>${escapeHtml(t("summary.liveBonusReadyFinishes"))}</dt>
-          <dd>${emptyAfterDock}</dd>
-        </div>
-      </dl>
-    `;
+    if (plan.startOrigin) {
+      appendSummaryEntry(breakdown, t("summary.nearestStation"), getStationLabel(plan.startStation));
+    }
 
-    elements.routeList.innerHTML = "";
+    if (plan.bikePickupStation.code !== plan.startStation.code) {
+      appendSummaryEntry(
+        breakdown,
+        t("summary.bikePickupStation"),
+        getStationLabel(plan.bikePickupStation)
+      );
+    }
+
+    if (plan.totalWalkMinutes > 0) {
+      appendSummaryEntry(
+        breakdown,
+        t("summary.initialWalking"),
+        `${formatMinutes(plan.totalWalkMinutes)} · ${plan.totalWalkDistanceKm.toFixed(1)} ${t("units.kilometer")}`
+      );
+    }
+
+    appendSummaryEntry(
+      breakdown,
+      t("summary.bufferAfterRoute"),
+      formatMinutes(plan.remainingBufferMinutes)
+    );
+    appendSummaryEntry(breakdown, t("summary.startBonusPoints"), plan.totalStartBonus);
+    appendSummaryEntry(breakdown, t("summary.finishBonusPoints"), plan.totalFinishBonus);
+    appendSummaryEntry(breakdown, t("summary.liveBonusReadyStarts"), occupiedNow);
+    appendSummaryEntry(breakdown, t("summary.liveBonusReadyFinishes"), emptyAfterDock);
+    elements.summaryDetails.replaceChildren(breakdown);
+
+    elements.routeList.replaceChildren();
     for (const step of plan.steps) {
       const item = document.createElement("li");
       item.className = "route-item";
@@ -216,29 +211,50 @@ export function createPlannerResultsRenderer({
             finishBonus: step.finishBonus,
             startBonus: step.startBonus,
           });
-      item.innerHTML = `
-        <div class="route-item__top">
-          <div>
-            <span class="route-item__index">${step.sequence}</span>
-            <h3 class="route-item__title">${renderStepTitle(step)}</h3>
-          </div>
-          <span class="route-item__points">${pointsText}</span>
-        </div>
-        <div class="route-item__meta">
-          <div>
-            <span>${metaLabel}</span>
-            <strong>${formatMinutes(step.travelMinutes)}</strong>
-          </div>
-          <div>
-            <span>${escapeHtml(t("route.distance"))}</span>
-            <strong>${step.distanceKm.toFixed(1)} ${t("units.kilometer")}</strong>
-          </div>
-          <div>
-            <span>${escapeHtml(isWalk ? t("route.legType") : t("route.bonusSplit"))}</span>
-            <strong>${bonusText}</strong>
-          </div>
-        </div>
-      `;
+
+      const top = document.createElement("div");
+      top.className = "route-item__top";
+
+      const headingWrap = document.createElement("div");
+      const index = document.createElement("span");
+      index.className = "route-item__index";
+      index.textContent = String(step.sequence);
+      const title = document.createElement("h3");
+      title.className = "route-item__title";
+      title.append(renderStepTitle(step));
+      headingWrap.append(index, title);
+
+      const points = document.createElement("span");
+      points.className = "route-item__points";
+      points.textContent = pointsText;
+      top.append(headingWrap, points);
+
+      const meta = document.createElement("div");
+      meta.className = "route-item__meta";
+
+      const timeMeta = document.createElement("div");
+      const timeLabel = document.createElement("span");
+      timeLabel.textContent = metaLabel;
+      const timeValue = document.createElement("strong");
+      timeValue.textContent = formatMinutes(step.travelMinutes);
+      timeMeta.append(timeLabel, timeValue);
+
+      const distanceMeta = document.createElement("div");
+      const distanceLabel = document.createElement("span");
+      distanceLabel.textContent = t("route.distance");
+      const distanceValue = document.createElement("strong");
+      distanceValue.textContent = `${step.distanceKm.toFixed(1)} ${t("units.kilometer")}`;
+      distanceMeta.append(distanceLabel, distanceValue);
+
+      const bonusMeta = document.createElement("div");
+      const bonusLabel = document.createElement("span");
+      bonusLabel.textContent = isWalk ? t("route.legType") : t("route.bonusSplit");
+      const bonusValue = document.createElement("strong");
+      bonusValue.textContent = bonusText;
+      bonusMeta.append(bonusLabel, bonusValue);
+
+      meta.append(timeMeta, distanceMeta, bonusMeta);
+      item.append(top, meta);
       elements.routeList.appendChild(item);
     }
 
