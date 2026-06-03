@@ -44,6 +44,94 @@ function setFinishTimeOnPage(page: Page, minutesFromNow: number) {
   }, minutesFromNow);
 }
 
+test("browser smoke: branding assets and share metadata are present in the built app", async t => {
+  const chromeExecutable = findChromeExecutable();
+  if (!chromeExecutable) {
+    t.skip("Google Chrome is not installed on this machine.");
+    return;
+  }
+
+  const server = await startTestServer({
+    analyticsStore: createInMemoryAnalyticsStore(),
+  });
+  let browser: Browser | null = null;
+
+  try {
+    browser = await chromium.launch({
+      executablePath: chromeExecutable,
+      headless: true,
+    });
+    const page = await openSmokePage(browser);
+
+    await page.goto(`${server.baseUrl}/`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    await expectHeading(page, "Gira Pointsmaxxer");
+    await page.locator("#plannerHero .hero__brand-mark").waitFor();
+
+    assert.equal(
+      await page.locator('meta[property="og:image"]').getAttribute("content"),
+      "https://gira-pointsmaxxer.onrender.com/og-image.png"
+    );
+    assert.equal(
+      await page.locator('meta[name="twitter:card"]').getAttribute("content"),
+      "summary_large_image"
+    );
+    assert.equal(
+      await page.locator('link[rel="manifest"]').getAttribute("href"),
+      "./site.webmanifest"
+    );
+
+    const fetchedAssets = Object.fromEntries(
+      await Promise.all(
+        [
+          "/favicon.svg",
+          "/favicon.ico",
+          "/apple-touch-icon.png",
+          "/og-image.png",
+          "/site.webmanifest",
+        ].map(async assetPath => {
+          const response = await fetch(`${server.baseUrl}${assetPath}`);
+          return [
+            assetPath,
+            {
+              contentType: response.headers.get("content-type") || "",
+              status: response.status,
+            },
+          ];
+        })
+      )
+    ) as Record<string, { contentType: string; status: number }>;
+
+    const faviconSvg = fetchedAssets["/favicon.svg"];
+    const faviconIco = fetchedAssets["/favicon.ico"];
+    const appleTouchIcon = fetchedAssets["/apple-touch-icon.png"];
+    const ogImage = fetchedAssets["/og-image.png"];
+    const manifest = fetchedAssets["/site.webmanifest"];
+
+    assert.ok(faviconSvg);
+    assert.ok(faviconIco);
+    assert.ok(appleTouchIcon);
+    assert.ok(ogImage);
+    assert.ok(manifest);
+
+    assert.equal(faviconSvg.status, 200);
+    assert.match(faviconSvg.contentType, /image\/svg\+xml/u);
+    assert.equal(faviconIco.status, 200);
+    assert.match(faviconIco.contentType, /image\/x-icon/u);
+    assert.equal(appleTouchIcon.status, 200);
+    assert.match(appleTouchIcon.contentType, /image\/png/u);
+    assert.equal(ogImage.status, 200);
+    assert.match(ogImage.contentType, /image\/png/u);
+    assert.equal(manifest.status, 200);
+    assert.match(manifest.contentType, /application\/manifest\+json|application\/json/u);
+  } finally {
+    if (browser) await browser.close();
+    await server.app.close();
+  }
+});
+
 test("browser smoke: demo snapshot can produce a route in the built app", async t => {
   const chromeExecutable = findChromeExecutable();
   if (!chromeExecutable) {
@@ -447,6 +535,18 @@ test("browser smoke: language picker can persist Portuguese across reloads", asy
     assert.equal(
       await portugueseStoredPage.locator("#plannerWhatIsThisLink").textContent(),
       "O que é isto?"
+    );
+    assert.equal(
+      await portugueseStoredPage.locator("#footerBrandName").textContent(),
+      "Gira Pointsmaxxer"
+    );
+    assert.equal(
+      await portugueseStoredPage.locator('meta[name="description"]').getAttribute("content"),
+      "Planeador independente de rotas para maximizar pontos na rede Gira de Lisboa."
+    );
+    assert.equal(
+      await portugueseStoredPage.locator('meta[property="og:image:alt"]').getAttribute("content"),
+      "Cartão de pré-visualização do Gira Pointsmaxxer com um emblema de corrida e uma linha sobre planeamento de rotas."
     );
   } finally {
     if (browser) await browser.close();

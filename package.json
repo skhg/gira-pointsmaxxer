@@ -18,7 +18,7 @@
     "test": "npm run typecheck && npm run build && node --import tsx --test --test-force-exit test/*.test.ts",
     "test:browser": "npm run typecheck && npm run build && node --import tsx --test --test-force-exit test/browser-smoke.test.ts",
     "test:server": "npm run typecheck && node --import tsx --test test/server.test.ts",
-    "test:unit": "npm run typecheck && node --import tsx --test test/analytics.test.ts test/finish-time.test.ts test/i18n.test.ts test/planner.test.ts test/stations.test.ts",
+    "test:unit": "npm run typecheck && node --import tsx --test test/analytics.test.ts test/branding.test.ts test/finish-time.test.ts test/i18n.test.ts test/planner.test.ts test/stations.test.ts",
     "serve": "node --import tsx server.ts",
     "start": "npm run build && node --import tsx server.ts"
   },

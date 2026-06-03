@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Gira Pointsmaxxer social preview</title>
+  <desc id="desc">Preview card showing the Gira Pointsmaxxer badge and app tagline.</desc>
+  <defs>
+    <clipPath id="flagClip">
+      <path d="M181 66L225 76L199 104L181 96Z" />
+    </clipPath>
+  </defs>
+
+  <rect width="1200" height="630" fill="#f4efe7" />
+  <circle cx="146" cy="96" r="180" fill="#0f9d58" fill-opacity="0.11" />
+  <circle cx="1084" cy="94" r="146" fill="#d97706" fill-opacity="0.14" />
+  <rect x="58" y="54" width="1084" height="522" rx="42" fill="#fffaf2" stroke="#d8c9b6" stroke-width="2" />
+
+  <g transform="translate(104 126) scale(1.32)">
+    <path
+      d="M128 14C160 31 196 38 223 50V140C223 209 182 255 128 274C74 255 33 209 33 140V50C60 38 96 31 128 14Z"
+      fill="#d97706"
+    />
+    <path
+      d="M128 20C158 36 191 43 216 54V139C216 204 178 247 128 265C78 247 40 204 40 139V54C65 43 98 36 128 20Z"
+      fill="#173423"
+    />
+    <path
+      d="M128 36C154 50 182 56 202 66V140C202 192 173 229 128 247C83 229 54 192 54 140V66C74 56 102 50 128 36Z"
+      fill="#f7f2e8"
+    />
+    <path
+      d="M66 190C83 166 102 156 124 151C142 147 156 136 166 121C173 111 177 100 181 80L172 77C168 96 164 106 158 114C150 126 138 136 126 140C108 145 89 153 72 182Z"
+      fill="#0d4d39"
+    />
+    <circle cx="74" cy="187" r="12" fill="#173423" />
+    <circle cx="74" cy="187" r="9" fill="#d97706" />
+    <circle cx="128" cy="148" r="10" fill="#173423" />
+    <circle cx="128" cy="148" r="7" fill="#d97706" />
+    <circle cx="178" cy="80" r="8" fill="#173423" />
+    <circle cx="178" cy="80" r="5.5" fill="#d97706" />
+    <rect x="177.5" y="78" width="7" height="78" rx="3.5" fill="#173423" />
+    <path
+      d="M181 66L225 76L199 104L181 96Z"
+      fill="#f7f2e8"
+    />
+    <g clip-path="url(#flagClip)">
+      <rect x="181" y="66" width="16" height="15" fill="#f7f2e8" />
+      <rect x="197" y="66" width="16" height="15" fill="#173423" />
+      <rect x="213" y="66" width="16" height="15" fill="#f7f2e8" />
+      <rect x="181" y="81" width="16" height="15" fill="#173423" />
+      <rect x="197" y="81" width="16" height="15" fill="#f7f2e8" />
+      <rect x="213" y="81" width="16" height="15" fill="#173423" />
+      <rect x="181" y="96" width="16" height="15" fill="#f7f2e8" />
+      <rect x="197" y="96" width="16" height="15" fill="#173423" />
+      <rect x="213" y="96" width="16" height="15" fill="#f7f2e8" />
+      <path d="M181 66L225 76L199 104L181 96Z" fill="none" stroke="#d97706" stroke-width="7" />
+    </g>
+    <path
+      d="M79 212C96 222 112 229 128 234C144 229 160 222 177 212"
+      fill="none"
+      stroke="#d97706"
+      stroke-linecap="round"
+      stroke-width="7"
+    />
+  </g>
+
+  <g fill="#5f6d59" font-family="'IBM Plex Mono', 'SFMono-Regular', monospace" font-size="22" letter-spacing="5">
+    <text x="500" y="164">UNOFFICIAL APP</text>
+  </g>
+
+  <g fill="#172314" font-family="'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif">
+    <text x="500" y="286" font-size="92" font-weight="700">Gira</text>
+    <text x="500" y="378" font-size="92" font-weight="700">Pointsmaxxer</text>
+  </g>
+
+  <g fill="#5f6d59" font-family="'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif" font-size="34">
+    <text x="500" y="452">Maximise points in Lisbon's Gira network</text>
+    <text x="500" y="496">with a fun route-planning tool.</text>
+  </g>
+</svg>

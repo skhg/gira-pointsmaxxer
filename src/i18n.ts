@@ -28,6 +28,11 @@ const translations = {
     pageTitle: "Gira Pointsmaxxer",
     creditsPageTitle: "Disclaimer & Credits · Gira Pointsmaxxer",
     statsPageTitle: "Public Stats · Gira Pointsmaxxer",
+    shell: {
+      description: "Independent route planner for maximising points in Lisbon's Gira bike network.",
+      shareImageAlt:
+        "Gira Pointsmaxxer preview card with a racing-badge logo and route-planning tagline.",
+    },
     language: {
       label: "Language",
     },
@@ -365,6 +370,11 @@ const translations = {
     pageTitle: "Gira Pointsmaxxer",
     creditsPageTitle: "Avisos e créditos · Gira Pointsmaxxer",
     statsPageTitle: "Estatísticas públicas · Gira Pointsmaxxer",
+    shell: {
+      description: "Planeador independente de rotas para maximizar pontos na rede Gira de Lisboa.",
+      shareImageAlt:
+        "Cartão de pré-visualização do Gira Pointsmaxxer com um emblema de corrida e uma linha sobre planeamento de rotas.",
+    },
     language: {
       label: "Idioma",
     },

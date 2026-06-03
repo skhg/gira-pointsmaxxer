@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   detectInitialLanguage,
+  getMessages,
   resolveLanguage,
 } from "../src/i18n.js";
 
@@ -62,4 +63,17 @@ test("language helpers resolve browser Portuguese and stored preferences", () =>
       delete (globalThis as { navigator?: unknown }).navigator;
     }
   }
+});
+
+test("shell metadata strings exist for both supported languages", () => {
+  const english = getMessages("en");
+  const portuguese = getMessages("pt-PT");
+
+  assert.equal(english.pageTitle, "Gira Pointsmaxxer");
+  assert.match(english.shell.description, /Independent route planner/u);
+  assert.match(english.shell.shareImageAlt, /preview card/u);
+
+  assert.equal(portuguese.pageTitle, "Gira Pointsmaxxer");
+  assert.match(portuguese.shell.description, /Planeador independente/u);
+  assert.match(portuguese.shell.shareImageAlt, /pré-visualização/u);
 });

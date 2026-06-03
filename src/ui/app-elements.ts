@@ -37,6 +37,7 @@ export interface AppElements {
   finishTimeInput: HTMLInputElement;
   finishTimeLabel: HTMLElement;
   finishTimeNote: HTMLElement;
+  footerBrandName: HTMLElement;
   footerCreditsLink: HTMLAnchorElement;
   languageLabel: HTMLElement;
   languageSelect: HTMLSelectElement;
@@ -143,6 +144,7 @@ export function getAppElements(): AppElements {
     finishTimeInput: getRequiredElement<HTMLInputElement>("finishTimeInput"),
     finishTimeLabel: getRequiredElement<HTMLElement>("finishTimeLabel"),
     finishTimeNote: getRequiredElement<HTMLElement>("finishTimeNote"),
+    footerBrandName: getRequiredElement<HTMLElement>("footerBrandName"),
     footerCreditsLink: getRequiredElement<HTMLAnchorElement>("footerCreditsLink"),
     languageLabel: getRequiredElement<HTMLElement>("languageLabel"),
     languageSelect: getRequiredElement<HTMLSelectElement>("languageSelect"),

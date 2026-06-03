@@ -3,7 +3,57 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title></title>
+    <title>Gira Pointsmaxxer</title>
+    <meta
+      id="metaDescription"
+      name="description"
+      content="Independent route planner for maximising points in Lisbon's Gira bike network."
+    />
+    <meta id="metaApplicationName" name="application-name" content="Gira Pointsmaxxer" />
+    <meta id="metaAppleWebAppTitle" name="apple-mobile-web-app-title" content="Gira Pointsmaxxer" />
+    <meta name="theme-color" content="#17311f" />
+    <link rel="canonical" href="https://gira-pointsmaxxer.onrender.com/" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
+    <link rel="shortcut icon" href="./favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta property="og:type" content="website" />
+    <meta id="metaOgSiteName" property="og:site_name" content="Gira Pointsmaxxer" />
+    <meta id="metaOgTitle" property="og:title" content="Gira Pointsmaxxer" />
+    <meta
+      id="metaOgDescription"
+      property="og:description"
+      content="Independent route planner for maximising points in Lisbon's Gira bike network."
+    />
+    <meta property="og:url" content="https://gira-pointsmaxxer.onrender.com/" />
+    <meta property="og:image" content="https://gira-pointsmaxxer.onrender.com/og-image.png" />
+    <meta
+      property="og:image:secure_url"
+      content="https://gira-pointsmaxxer.onrender.com/og-image.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      id="metaOgImageAlt"
+      property="og:image:alt"
+      content="Gira Pointsmaxxer preview card with a racing-badge logo and route-planning tagline."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta id="metaTwitterTitle" name="twitter:title" content="Gira Pointsmaxxer" />
+    <meta
+      id="metaTwitterDescription"
+      name="twitter:description"
+      content="Independent route planner for maximising points in Lisbon's Gira bike network."
+    />
+    <meta name="twitter:image" content="https://gira-pointsmaxxer.onrender.com/og-image.png" />
+    <meta
+      id="metaTwitterImageAlt"
+      name="twitter:image:alt"
+      content="Gira Pointsmaxxer preview card with a racing-badge logo and route-planning tagline."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,29 +72,44 @@
       </div>
 
       <header class="hero" id="plannerHero">
-        <div class="hero__copy">
-          <p class="eyebrow" id="plannerEyebrow"></p>
-          <h1 id="plannerTitle"></h1>
-          <p class="lede">
-            <span id="plannerLedeText"></span>
-            <a class="hero__link" href="/credits" data-route="/credits" id="plannerWhatIsThisLink"></a>
-          </p>
+        <div class="hero__layout">
+          <div class="hero__copy">
+            <p class="eyebrow" id="plannerEyebrow"></p>
+            <h1 id="plannerTitle"></h1>
+            <p class="lede">
+              <span id="plannerLedeText"></span>
+              <a class="hero__link" href="/credits" data-route="/credits" id="plannerWhatIsThisLink"></a>
+            </p>
+          </div>
+          <div class="hero__mark">
+            <img class="hero__brand-mark" src="./logo-badge.svg" alt="" aria-hidden="true" />
+          </div>
         </div>
       </header>
 
       <header class="hero hero--secondary" id="creditsHero" hidden>
-        <div class="hero__copy">
-          <p class="eyebrow" id="creditsHeroEyebrow"></p>
-          <h1 id="creditsHeroTitle"></h1>
-          <p class="lede" id="creditsHeroLede"></p>
+        <div class="hero__layout">
+          <div class="hero__copy">
+            <p class="eyebrow" id="creditsHeroEyebrow"></p>
+            <h1 id="creditsHeroTitle"></h1>
+            <p class="lede" id="creditsHeroLede"></p>
+          </div>
+          <div class="hero__mark">
+            <img class="hero__brand-mark" src="./logo-badge.svg" alt="" aria-hidden="true" />
+          </div>
         </div>
       </header>
 
       <header class="hero hero--secondary" id="statsHero" hidden>
-        <div class="hero__copy">
-          <p class="eyebrow" id="statsHeroEyebrow"></p>
-          <h1 id="statsHeroTitle"></h1>
-          <p class="lede" id="statsHeroLede"></p>
+        <div class="hero__layout">
+          <div class="hero__copy">
+            <p class="eyebrow" id="statsHeroEyebrow"></p>
+            <h1 id="statsHeroTitle"></h1>
+            <p class="lede" id="statsHeroLede"></p>
+          </div>
+          <div class="hero__mark">
+            <img class="hero__brand-mark" src="./logo-badge.svg" alt="" aria-hidden="true" />
+          </div>
         </div>
       </header>
 
@@ -291,6 +356,10 @@
       </main>
 
       <footer class="app-footer" id="appFooter">
+        <div class="app-footer__brand">
+          <img class="app-footer__brand-mark" src="./logo-badge.svg" alt="" aria-hidden="true" />
+          <span id="footerBrandName">Gira Pointsmaxxer</span>
+        </div>
         <div class="app-footer__links">
           <a class="app-footer__link" href="/credits" data-route="/credits" id="footerCreditsLink"></a>
           <a class="app-footer__link" href="/stats" data-route="/stats" id="footerStatsLink"></a>

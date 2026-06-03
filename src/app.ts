@@ -48,6 +48,28 @@ const state: AppState = {
 
 const elements = getAppElements();
 
+function getRequiredMetaElement(id: string): HTMLMetaElement {
+  const element = document.getElementById(id);
+  if (!element || !(element instanceof HTMLMetaElement)) {
+    throw new Error(`Missing required meta element #${id}`);
+  }
+
+  return element;
+}
+
+const shellMetaElements = {
+  appleWebAppTitle: getRequiredMetaElement("metaAppleWebAppTitle"),
+  applicationName: getRequiredMetaElement("metaApplicationName"),
+  description: getRequiredMetaElement("metaDescription"),
+  ogDescription: getRequiredMetaElement("metaOgDescription"),
+  ogImageAlt: getRequiredMetaElement("metaOgImageAlt"),
+  ogSiteName: getRequiredMetaElement("metaOgSiteName"),
+  ogTitle: getRequiredMetaElement("metaOgTitle"),
+  twitterDescription: getRequiredMetaElement("metaTwitterDescription"),
+  twitterImageAlt: getRequiredMetaElement("metaTwitterImageAlt"),
+  twitterTitle: getRequiredMetaElement("metaTwitterTitle"),
+};
+
 const creditsRenderer = createCreditsRenderer({
   container: elements.creditsSections,
 });
@@ -247,8 +269,26 @@ function handleRouteRendered(route: AppRoutePath) {
   }
 }
 
+function applyShellMetadata() {
+  const appTitle = t("pageTitle");
+  const description = t("shell.description");
+  const shareImageAlt = t("shell.shareImageAlt");
+
+  shellMetaElements.description.content = description;
+  shellMetaElements.applicationName.content = appTitle;
+  shellMetaElements.appleWebAppTitle.content = appTitle;
+  shellMetaElements.ogSiteName.content = appTitle;
+  shellMetaElements.ogTitle.content = appTitle;
+  shellMetaElements.ogDescription.content = description;
+  shellMetaElements.ogImageAlt.content = shareImageAlt;
+  shellMetaElements.twitterTitle.content = appTitle;
+  shellMetaElements.twitterDescription.content = description;
+  shellMetaElements.twitterImageAlt.content = shareImageAlt;
+}
+
 function applyStaticTranslations() {
   document.documentElement.lang = state.language;
+  applyShellMetadata();
   elements.languageLabel.textContent = t("language.label");
   elements.plannerEyebrow.textContent = t("hero.eyebrow");
   elements.plannerTitle.textContent = t("hero.title");
@@ -298,6 +338,7 @@ function applyStaticTranslations() {
   elements.creditsPanelEyebrow.textContent = t("credits.panelEyebrow");
   elements.creditsPanelTitle.textContent = t("credits.panelTitle");
   elements.backToPlannerLink.textContent = t("credits.backToPlanner");
+  elements.footerBrandName.textContent = t("pageTitle");
   elements.footerCreditsLink.textContent = t("credits.footerLink");
   elements.statsHeroEyebrow.textContent = t("stats.heroEyebrow");
   elements.statsHeroTitle.textContent = t("stats.heroTitle");
